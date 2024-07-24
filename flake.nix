@@ -17,7 +17,7 @@
           pname = "rust_cli_pomodoro";
           version = "1.4.5";
           src = ./.;
-          cargoSha256 = "";
+          cargoSha256 = "sha256-yqFICFbZ2MreTbDWCz69/onJMI7YgWz0bfsWgiwwMAk=";
           buildInputs = [pkgs.openssl];
           nativeBuildInputs = [pkgs.cargo pkgs.rustc pkgs.pkg-config pkgs.openssl];
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [pkgs.openssl];
@@ -27,6 +27,11 @@
           buildInputs = [pkgs.openssl];
           nativeBuildInputs = [pkgs.cargo pkgs.rustc pkgs.pkg-config pkgs.openssl];
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [pkgs.openssl];
+        };
+
+        apps.rust_cli_pomodoro = {
+          type = "app";
+          program = "${self.defaultPackage.${system}}/bin/pomodoro";
         };
       }
     );
