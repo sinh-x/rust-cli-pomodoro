@@ -154,6 +154,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     debug!("input: {:?}", user_input);
                     util::print_start_up();
                 }
+                info!("debug loop/while");
             }
         }
         CommandType::UdsClient(matches) => {
