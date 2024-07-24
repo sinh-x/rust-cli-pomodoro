@@ -321,6 +321,9 @@ pub fn get_uds_address(r#type: UdsType) -> PathBuf {
     };
 
     let mut p = env::temp_dir();
+    let username = env::var("USER").unwrap_or("default".to_string());
+    p.push(username); // Use the username to create a sub-directory
+    std::fs::create_dir_all(&p).expect("Failed to create directory");
     p.push(socket_addr);
 
     p
