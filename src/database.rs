@@ -212,21 +212,26 @@ pub async fn delete_notification(glue: ArcGlue, id: u16) {
 }
 
 //TODO(young): Handle error?
-pub async fn archive_notification(glue: ArcGlue, id: u16) {
-    let mut glue = glue.lock().unwrap();
+pub async fn archive_notification(
+    glue: ArcGlue,
+    id: u16,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut glue = glue.lock().map_err(|_| "Failed to acquire lock")?;
 
     let sql = format!(
         r#"
-    INSERT INTO archived_notifications
-    SELECT * FROM notifications WHERE id = {};
+        INSERT INTO archived_notifications
+        SELECT * FROM notifications WHERE id = {};
     "#,
         id
     );
 
     debug!("sql: {:?}", sql);
 
-    let output = glue.execute(sql.as_str()).unwrap();
+    let output = glue.execute(&sql)?;
     debug!("output: {:?}", output);
+
+    Ok(())
 }
 
 pub async fn archive_all_notification(glue: ArcGlue) {
@@ -316,7 +321,7 @@ mod tests {
         initialize(glue.clone()).await;
 
         let now = Utc::now();
-        let notification = Notification::new(0, 25, 5, now);
+        let notification = Notification::new(0, 25, 5, now, "A pomodoro".to_string());
 
         create_notification(glue.clone(), &notification).await;
 
@@ -346,10 +351,10 @@ mod tests {
         assert_eq!(0, result.len());
 
         let now = Utc::now();
-        let notification = Notification::new(0, 25, 5, now);
+        let notification = Notification::new(0, 25, 5, now, "A pomodoro".to_string());
         create_notification(glue.clone(), &notification).await;
 
-        let notification = Notification::new(1, 30, 10, now);
+        let notification = Notification::new(1, 30, 10, now, "A pomodoro".to_string());
         create_notification(glue.clone(), &notification).await;
 
         let result = list_notification(glue.clone()).await;
@@ -364,7 +369,7 @@ mod tests {
         initialize(glue.clone()).await;
 
         let now = Utc::now();
-        let notification = Notification::new(0, 25, 5, now);
+        let notification = Notification::new(0, 25, 5, now, "A pomodoro".to_string());
         create_notification(glue.clone(), &notification).await;
 
         delete_notification(glue.clone(), 0).await;
@@ -378,10 +383,10 @@ mod tests {
         initialize(glue.clone()).await;
 
         let now = Utc::now();
-        let notification = Notification::new(0, 25, 5, now);
+        let notification = Notification::new(0, 25, 5, now, "A pomodoro".to_string());
         create_notification(glue.clone(), &notification).await;
 
-        let notification = Notification::new(1, 30, 10, now);
+        let notification = Notification::new(1, 30, 10, now, "A pomodoro".to_string());
         create_notification(glue.clone(), &notification).await;
 
         delete_all_notification(glue.clone()).await;
@@ -395,10 +400,10 @@ mod tests {
         initialize(glue.clone()).await;
 
         let now = Utc::now();
-        let notification = Notification::new(0, 25, 5, now);
+        let notification = Notification::new(0, 25, 5, now, "A pomodoro".to_string());
         create_notification(glue.clone(), &notification).await;
 
-        let notification = Notification::new(1, 30, 10, now);
+        let notification = Notification::new(1, 30, 10, now, "A pomodoro".to_string());
         create_notification(glue.clone(), &notification).await;
 
         archive_all_notification(glue.clone()).await;
@@ -416,7 +421,7 @@ mod tests {
         initialize(glue.clone()).await;
 
         let now = Utc::now();
-        let notification = Notification::new(0, 25, 5, now);
+        let notification = Notification::new(0, 25, 5, now, "A pomodoro".to_string());
         create_notification(glue.clone(), &notification).await;
 
         archive_notification(glue.clone(), 0).await;
@@ -434,7 +439,7 @@ mod tests {
         initialize(glue.clone()).await;
 
         let now = Utc::now();
-        let notification = Notification::new(0, 25, 5, now);
+        let notification = Notification::new(0, 25, 5, now, "A pomodoro".to_string());
         create_notification(glue.clone(), &notification).await;
 
         archive_notification(glue.clone(), 0).await;
@@ -454,10 +459,10 @@ mod tests {
         initialize(glue.clone()).await;
 
         let now = Utc::now();
-        let notification = Notification::new(0, 25, 5, now);
+        let notification = Notification::new(0, 25, 5, now, "A pomodoro".to_string());
         create_notification(glue.clone(), &notification).await;
 
-        let notification = Notification::new(1, 30, 10, now);
+        let notification = Notification::new(1, 30, 10, now, "A pomodoro".to_string());
         create_notification(glue.clone(), &notification).await;
 
         let result = read_last_expired_notification(glue.clone()).await;

@@ -31,13 +31,19 @@ pub struct Notification {
 }
 
 impl<'a> Notification {
-    pub fn new(id: u16, work_time: u16, break_time: u16, created_at: DateTime<Utc>) -> Self {
+    pub fn new(
+        id: u16,
+        work_time: u16,
+        break_time: u16,
+        created_at: DateTime<Utc>,
+        description: String,
+    ) -> Self {
         let work_expired_at = created_at + Duration::minutes(work_time as i64);
         let break_expired_at = work_expired_at + Duration::minutes(break_time as i64);
 
         Notification {
             id,
-            description: String::from("sample"),
+            description,
             work_time,
             break_time,
             created_at,
@@ -259,15 +265,18 @@ pub fn get_new_notification(
     created_at: DateTime<Utc>,
     configuration: Arc<Configuration>,
 ) -> Result<Notification, NotificationError> {
-    let (work_time, break_time) = util::parse_work_and_break_time(matches, Some(&configuration))
-        .map_err(NotificationError::NewNotification)?;
+    let (work_time, break_time, description) =
+        util::parse_work_and_break_time(matches, Some(&configuration))
+            .map_err(NotificationError::NewNotification)?;
 
     // should never panic on unwrap as parse_work_and_break_time already handles it
     let work_time = work_time.unwrap();
     let break_time = break_time.unwrap();
+    let description = description.unwrap();
 
     debug!("work_time: {}", work_time);
     debug!("break_time: {}", break_time);
+    debug!("description: {}", description);
 
     if work_time == 0 && break_time == 0 {
         return Err(NotificationError::EmptyTimeValues);
@@ -275,7 +284,13 @@ pub fn get_new_notification(
 
     let id = get_new_id(id_manager);
 
-    Ok(Notification::new(id, work_time, break_time, created_at))
+    Ok(Notification::new(
+        id,
+        work_time,
+        break_time,
+        created_at,
+        description,
+    ))
 }
 
 fn get_new_id(id_manager: &mut u16) -> u16 {
@@ -338,7 +353,7 @@ mod tests {
     #[test]
     fn test_notification() {
         let now = Utc::now();
-        let notification1 = Notification::new(0, 25, 5, now);
+        let notification1 = Notification::new(0, 25, 5, now, "sample".to_string());
         assert_eq!(
             now.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
             notification1
@@ -406,7 +421,7 @@ mod tests {
     #[test]
     fn test_notification_tabled_impl() {
         let now = Utc::now();
-        let notification = Notification::new(0, 25, 5, now);
+        let notification = Notification::new(0, 25, 5, now, "A pomodoro".to_string());
 
         let fields = notification.fields();
         assert_eq!(8, fields.len());

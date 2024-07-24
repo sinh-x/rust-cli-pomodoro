@@ -159,6 +159,14 @@ If no configuration file is passed or the keys are not present, then 25 minutes 
                 .long("default")
                 .num_args(0),
         )
+        .arg(
+            Arg::new("description")
+                .long_help("Sets the description for the notification")
+                .short('c')
+                .long("description")
+                .help("Sets the description for the notification")
+                .value_name("STRING")
+        )
 }
 
 #[cfg(test)]

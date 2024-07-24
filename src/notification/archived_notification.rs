@@ -105,7 +105,7 @@ mod tests {
     #[test]
     fn test_archived_notification_conversion() {
         let now = Utc::now();
-        let notification = Notification::new(0, 25, 5, now);
+        let notification = Notification::new(0, 25, 5, now, "A pomodoro".to_string());
         let archived_notification = ArchivedNotification::from(notification);
 
         assert_eq!(
@@ -119,7 +119,7 @@ mod tests {
     #[test]
     fn test_archived_notification_tabled_impl() {
         let now = Utc::now();
-        let notification = Notification::new(0, 25, 5, now);
+        let notification = Notification::new(0, 25, 5, now, "A pomodoro".to_string());
         let archived_notification = ArchivedNotification::from(notification);
 
         let fields = archived_notification.fields();
