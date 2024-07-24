@@ -94,35 +94,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
             // TODO(young) handle `rx.recv().await` returns None case
             // TODO(young): handle tokio::spawn return value nicely so that we can use `?` inside
-            while let Some(user_input) = user_input_rx.recv().await {
-                // extract input
-                let input = user_input.input.as_str();
-                debug!("input: {:?}", input);
+            loop {
+                while let Some(user_input) = user_input_rx.recv().await {
+                    // extract input
+                    let input = user_input.input.as_str();
+                    debug!("input: {:?}", input);
 
-                // handle input
-                match handler::user_input::handle(input, &mut id_manager, &hash_map, &glue, &config)
+                    // handle input
+                    match handler::user_input::handle(
+                        input,
+                        &mut id_manager,
+                        &hash_map,
+                        &glue,
+                        &config,
+                    )
                     .await
-                {
-                    Ok(mut output) => match user_input.source {
-                        InputSource::StandardInput => {}
-                        InputSource::UnixDomainSocket => {
-                            if let Some(ref server_tx) = server_tx {
-                                let client_addr = get_uds_address(UdsType::Client);
-                                ipc::send_to(
-                                    server_tx,
-                                    client_addr,
-                                    MessageResponse::new(output.take_body())
-                                        .encode()?
-                                        .as_slice(),
-                                )
-                                .await;
-                            }
-                        }
-                    },
-                    Err(e) => {
-                        println!("There was an error analyzing the input: {}", e);
-
-                        match user_input.source {
+                    {
+                        Ok(mut output) => match user_input.source {
                             InputSource::StandardInput => {}
                             InputSource::UnixDomainSocket => {
                                 if let Some(ref server_tx) = server_tx {
@@ -130,22 +118,42 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                     ipc::send_to(
                                         server_tx,
                                         client_addr,
-                                        MessageResponse::new(vec![format!(
-                                            "There was an error analyzing the input: {}",
-                                            e
-                                        )])
-                                        .encode()?
-                                        .as_slice(),
+                                        MessageResponse::new(output.take_body())
+                                            .encode()?
+                                            .as_slice(),
                                     )
                                     .await;
                                 }
                             }
+                        },
+                        Err(e) => {
+                            println!("There was an error analyzing the input: {}", e);
+
+                            match user_input.source {
+                                InputSource::StandardInput => {}
+                                InputSource::UnixDomainSocket => {
+                                    if let Some(ref server_tx) = server_tx {
+                                        let client_addr = get_uds_address(UdsType::Client);
+                                        ipc::send_to(
+                                            server_tx,
+                                            client_addr,
+                                            MessageResponse::new(vec![format!(
+                                                "There was an error analyzing the input: {}",
+                                                e
+                                            )])
+                                            .encode()?
+                                            .as_slice(),
+                                        )
+                                        .await;
+                                    }
+                                }
+                            }
                         }
                     }
-                }
 
-                debug!("input: {:?}", user_input);
-                util::print_start_up();
+                    debug!("input: {:?}", user_input);
+                    util::print_start_up();
+                }
             }
         }
         CommandType::UdsClient(matches) => {
