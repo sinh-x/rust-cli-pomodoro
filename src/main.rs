@@ -76,7 +76,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
             // Start handling UDS input
             let uds_input_tx = user_input_tx.clone();
-            let server_uds_option = create_server_uds().await.unwrap();
+            let server_uds_option = match create_server_uds().await {
+                Ok(server) => server,
+                Err(e) => {
+                    eprintln!("An error occurred when creating the server: {}", e);
+                    std::process::exit(1);
+                }
+            };
             let server_tx = match server_uds_option {
                 Some(uds) => {
                     let server_uds = Arc::new(uds);
@@ -89,10 +95,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
             };
 
             // Main loop to handle user input
-            // Main loop to handle user input
+            debug!("Main loop to handle user input");
             loop {
+                debug!("Server is alive");
                 while let Some(user_input) = user_input_rx.recv().await {
-                    handle_user_input(
+                    debug!("Server is alive inside while");
+                    match handle_user_input(
                         user_input,
                         &mut id_manager,
                         &hash_map,
@@ -100,7 +108,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         &config,
                         &server_tx,
                     )
-                    .await?;
+                    .await
+                    {
+                        Ok(_) => {}
+                        Err(e) => debug!("There was an error handling the user input: {}", e),
+                    }
                 }
             }
         }
@@ -157,20 +169,19 @@ async fn handle_user_input(
             }
         },
         Err(e) => {
-            println!("There was an error analyzing the input: {}", e);
+            debug!("There was an error analyzing the input: {}", e);
             if let Some(ref server_tx) = server_tx {
                 let client_addr = get_uds_address(UdsType::Client);
-                ipc::send_to(
-                    server_tx,
-                    client_addr,
-                    MessageResponse::new(vec![format!(
-                        "There was an error analyzing the input: {}",
-                        e
-                    )])
-                    .encode()?
-                    .as_slice(),
-                )
-                .await;
+                if let Ok(encoded) = MessageResponse::new(vec![format!(
+                    "There was an error analyzing the input: {}",
+                    e
+                )])
+                .encode()
+                {
+                    let _ = ipc::send_to(server_tx, client_addr, encoded.as_slice()).await;
+                } else {
+                    debug!("Error encoding message response");
+                }
             }
         }
     }
@@ -265,7 +276,6 @@ fn spawn_uds_input_handler(
     server_rx: Arc<UnixDatagram>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
-        // TODO(young) handle result
         let rx = server_rx;
         let mut buf = vec![0u8; 256];
         debug!("rx is initialized successfully");

@@ -4,10 +4,11 @@ use bincode::Decode;
 use bincode::Encode;
 use std::env;
 use std::fs;
+use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::net::UnixDatagram;
-use tokio::time::{timeout};
+use tokio::time::timeout;
 
 use crate::command::action::ActionType;
 use crate::InputSource;
@@ -230,7 +231,7 @@ pub mod internal {
 
 // TODO(young): The result should be optional
 pub async fn create_server_uds() -> Result<Option<UnixDatagram>, std::io::Error> {
-    debug!("create_server_uds called");
+    debug!("create_server_uds called begin");
     let result = detect_address_in_use().await;
     debug!("result: {:?}", result);
     if let Ok(address_in_use) = result {
@@ -240,16 +241,47 @@ pub async fn create_server_uds() -> Result<Option<UnixDatagram>, std::io::Error>
         }
     }
 
-    // TODO(young): handle create_uds_address error
-    let server_addr = create_uds_address(UdsType::Server, true)?;
-    let socket = UnixDatagram::bind(server_addr)?;
+    let server_addr = match create_uds_address(UdsType::Server, false) {
+        Ok(addr) => addr,
+        Err(e) => {
+            debug!("create_server_uds called okay");
+            if e.kind() == std::io::ErrorKind::Other && e.to_string() == "Server is already running"
+            {
+                eprintln!("Server is already running");
+                return Err(e);
+            } else {
+                if e.kind() == ErrorKind::ConnectionRefused {
+                    // Server is not running, create a new server with should_remove set to true
+                    match create_uds_address(UdsType::Server, false) {
+                        Ok(addr) => addr,
+                        Err(e) => {
+                            error!("An error occurred when creating the UDS address: {}", e);
+                            return Err(e);
+                        }
+                    }
+                } else {
+                    // An error occurred
+                    error!("An error occurred: {}", e);
+                    return Err(e);
+                }
+            }
+        }
+    };
+
+    let socket = match UnixDatagram::bind(server_addr) {
+        Ok(socket) => socket,
+        Err(e) => {
+            error!("An error occurred when binding the socket: {}", e);
+            return Err(e);
+        }
+    };
 
     debug!("create_server_uds called");
     Ok(Some(socket))
 }
 
 pub async fn create_client_uds() -> Result<UnixDatagram, std::io::Error> {
-    let server_addr = create_uds_address(UdsType::Server, false)?;
+    let server_addr = get_uds_address(UdsType::Server);
     let client_addr = create_uds_address(UdsType::Client, true)?;
 
     let socket = UnixDatagram::bind(client_addr)?;
@@ -304,11 +336,29 @@ async fn detect_address_in_use() -> Result<bool, std::io::Error> {
 fn create_uds_address(r#type: UdsType, should_remove: bool) -> std::io::Result<PathBuf> {
     let path = get_uds_address(r#type);
 
-    if should_remove && path.exists() {
-        debug!("path {:?} exists, remove it before binding", &path);
-        fs::remove_file(&path)?;
+    if path.exists() {
+        if should_remove {
+            debug!("path {:?} exists, remove it before binding", &path);
+            fs::remove_file(&path)?;
+        } else {
+            match UnixDatagram::unbound() {
+                Ok(datagram) => match datagram.connect(&path) {
+                    Ok(_) => {
+                        error!("Server is running at path {:?}", &path);
+                        return Err(Error::new(ErrorKind::Other, "Server is already running"));
+                    }
+                    Err(e) => {
+                        error!("An error occurred when creating the UDS address: {}", e);
+                        return Err(e);
+                    }
+                },
+                Err(e) => {
+                    error!("An error occurred: {}", e);
+                    return Err(e);
+                }
+            }
+        }
     }
-
     debug!("create_uds_address, path: {:?}", path);
 
     Ok(path)
@@ -326,6 +376,7 @@ pub fn get_uds_address(r#type: UdsType) -> PathBuf {
     std::fs::create_dir_all(&p).expect("Failed to create directory");
     p.push(socket_addr);
 
+    debug!("get_uds_address, path: {:?}", p);
     p
 }
 
@@ -340,7 +391,10 @@ pub async fn send_to(socket: &UnixDatagram, target: PathBuf, buf: &[u8]) {
 
         let buf = &buf[start..end];
         debug!("buf length to be sent: {}", buf.len());
-        socket.send_to(buf, &target).await.unwrap();
+        match socket.send_to(buf, &target).await {
+            Ok(_) => debug!("sent for loop"),
+            Err(e) => error!("send_to error: {:?}", e),
+        };
 
         // Wait for certain time due to
         // "No buffer space available" error in mac os.
@@ -349,5 +403,8 @@ pub async fn send_to(socket: &UnixDatagram, target: PathBuf, buf: &[u8]) {
     }
 
     let fin = Vec::new();
-    socket.send_to(fin.as_slice(), &target).await.unwrap();
+    match socket.send_to(fin.as_slice(), &target).await {
+        Ok(_) => debug! {"sent final"},
+        Err(e) => error!("There was an error sending to the socket: {}", e),
+    }
 }
