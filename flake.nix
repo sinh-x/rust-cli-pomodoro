@@ -15,9 +15,9 @@
       in {
         defaultPackage = pkgs.rustPlatform.buildRustPackage rec {
           pname = "rust_cli_pomodoro";
-          version = "1.4.5-rc.1";
+          version = "1.4.5-rc.2";
           src = ./.;
-          cargoSha256 = "sha256-XZ7QUDpFuycmf70I2XMcH1CHs++Dq88XuIUP3FRY99Q=";
+          cargoSha256 = "sha256-YvAKA3bNXQJj0BTovshlom20nr1FonDAS6XoaJpcwtM=";
           buildInputs = [pkgs.openssl];
           nativeBuildInputs = [pkgs.cargo pkgs.rustc pkgs.pkg-config pkgs.openssl];
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [pkgs.openssl];

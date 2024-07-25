@@ -76,13 +76,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
             // Start handling UDS input
             let uds_input_tx = user_input_tx.clone();
-            let server_uds_option = match create_server_uds().await {
-                Ok(server) => server,
-                Err(e) => {
-                    eprintln!("An error occurred when creating the server: {}", e);
-                    std::process::exit(1);
-                }
-            };
+            let server_uds_option = create_server_uds().await.unwrap();
             let server_tx = match server_uds_option {
                 Some(uds) => {
                     let server_uds = Arc::new(uds);
