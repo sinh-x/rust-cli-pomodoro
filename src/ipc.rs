@@ -7,7 +7,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::net::UnixDatagram;
-use tokio::time::{sleep, timeout};
+use tokio::time::{timeout};
 
 use crate::command::action::ActionType;
 use crate::InputSource;

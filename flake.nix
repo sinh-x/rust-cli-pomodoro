@@ -17,10 +17,19 @@
           pname = "rust_cli_pomodoro";
           version = "1.4.5";
           src = ./.;
-          cargoSha256 = "sha256-jJH7O5qLL2oFlbjmZecviLi2Zr56ZMO4F8KjIqrclR0=";
+          cargoSha256 = "sha256-QF/+UVTZRqDjaXU+xnaNf1WNe1qHF4ekrdM0rQYVeVw=";
           buildInputs = [pkgs.openssl];
           nativeBuildInputs = [pkgs.cargo pkgs.rustc pkgs.pkg-config pkgs.openssl];
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [pkgs.openssl];
+
+          buildPhase = ''
+            cargo build --release
+          '';
+
+          installPhase = ''
+            mkdir -p $out/bin
+            cp target/release/pomodoro $out/bin
+          '';
         };
 
         devShell = pkgs.mkShell {

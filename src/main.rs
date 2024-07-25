@@ -61,24 +61,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
     debug!("debug test, start pomodoro...");
 
     let command_type = detect_command_type().await?;
-
     match command_type {
         CommandType::StartUp(config) => {
-            info!("start pomodoro...");
-            debug!("CommandType::StartUp");
+            info!("Starting server...");
 
             let glue = initialize_db().await;
             let mut id_manager: u16 = 1;
             let hash_map: Arc<Mutex<TaskMap>> = Arc::new(Mutex::new(HashMap::new()));
             let (user_input_tx, mut user_input_rx) = mpsc::channel::<UserInput>(64);
 
+            // Start handling stdin input in a separate task
             let stdin_tx = user_input_tx.clone();
-            // TODO(young): handle tokio::spawn return value nicely so that we can use `?` inside
             let _input_handle = line_handler::handle(stdin_tx);
 
-            // handle uds
+            // Start handling UDS input
             let uds_input_tx = user_input_tx.clone();
-
             let server_uds_option = create_server_uds().await.unwrap();
             let server_tx = match server_uds_option {
                 Some(uds) => {
@@ -86,75 +83,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     let (server_rx, server_tx) = (server_uds.clone(), server_uds.clone());
                     let _uds_input_handle =
                         spawn_uds_input_handler(uds_input_tx, server_tx, server_rx);
-
                     Some(server_uds)
                 }
                 None => None,
             };
 
-            // TODO(young) handle `rx.recv().await` returns None case
-            // TODO(young): handle tokio::spawn return value nicely so that we can use `?` inside
+            // Main loop to handle user input
+            // Main loop to handle user input
             loop {
                 while let Some(user_input) = user_input_rx.recv().await {
-                    // extract input
-                    let input = user_input.input.as_str();
-                    debug!("input: {:?}", input);
-
-                    // handle input
-                    match handler::user_input::handle(
-                        input,
+                    handle_user_input(
+                        user_input,
                         &mut id_manager,
                         &hash_map,
                         &glue,
                         &config,
+                        &server_tx,
                     )
-                    .await
-                    {
-                        Ok(mut output) => match user_input.source {
-                            InputSource::StandardInput => {}
-                            InputSource::UnixDomainSocket => {
-                                if let Some(ref server_tx) = server_tx {
-                                    let client_addr = get_uds_address(UdsType::Client);
-                                    ipc::send_to(
-                                        server_tx,
-                                        client_addr,
-                                        MessageResponse::new(output.take_body())
-                                            .encode()?
-                                            .as_slice(),
-                                    )
-                                    .await;
-                                }
-                            }
-                        },
-                        Err(e) => {
-                            println!("There was an error analyzing the input: {}", e);
-
-                            match user_input.source {
-                                InputSource::StandardInput => {}
-                                InputSource::UnixDomainSocket => {
-                                    if let Some(ref server_tx) = server_tx {
-                                        let client_addr = get_uds_address(UdsType::Client);
-                                        ipc::send_to(
-                                            server_tx,
-                                            client_addr,
-                                            MessageResponse::new(vec![format!(
-                                                "There was an error analyzing the input: {}",
-                                                e
-                                            )])
-                                            .encode()?
-                                            .as_slice(),
-                                        )
-                                        .await;
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    debug!("input: {:?}", user_input);
-                    util::print_start_up();
+                    .await?;
                 }
-                info!("debug loop/while");
             }
         }
         CommandType::UdsClient(matches) => {
@@ -171,12 +118,65 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     generate(shell, &mut main_command, bin_name, &mut stdout);
                 }
             } else {
-                println!("no shell name was passed");
+                println!("No shell name was passed");
             }
         }
     }
 
     debug!("handle_uds_client_command called successfully");
+
+    Ok(())
+}
+
+async fn handle_user_input(
+    user_input: UserInput,
+    id_manager: &mut u16,
+    hash_map: &Arc<Mutex<TaskMap>>,
+    glue: &ArcGlue,
+    config: &Arc<Configuration>,
+    server_tx: &Option<Arc<UnixDatagram>>,
+) -> Result<(), Box<dyn Error>> {
+    let input = user_input.input.as_str();
+    debug!("Input: {:?}", input);
+
+    match handler::user_input::handle(input, id_manager, hash_map, glue, config).await {
+        Ok(mut output) => match user_input.source {
+            InputSource::StandardInput => {}
+            InputSource::UnixDomainSocket => {
+                if let Some(ref server_tx) = server_tx {
+                    let client_addr = get_uds_address(UdsType::Client);
+                    ipc::send_to(
+                        server_tx,
+                        client_addr,
+                        MessageResponse::new(output.take_body())
+                            .encode()?
+                            .as_slice(),
+                    )
+                    .await;
+                }
+            }
+        },
+        Err(e) => {
+            println!("There was an error analyzing the input: {}", e);
+            if let Some(ref server_tx) = server_tx {
+                let client_addr = get_uds_address(UdsType::Client);
+                ipc::send_to(
+                    server_tx,
+                    client_addr,
+                    MessageResponse::new(vec![format!(
+                        "There was an error analyzing the input: {}",
+                        e
+                    )])
+                    .encode()?
+                    .as_slice(),
+                )
+                .await;
+            }
+        }
+    }
+
+    debug!("Handled input: {:?}", user_input);
+    util::print_start_up();
 
     Ok(())
 }

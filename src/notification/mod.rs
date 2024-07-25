@@ -1,8 +1,6 @@
 pub(crate) mod archived_notification;
 pub(crate) mod notify;
 
-pub use archived_notification::*;
-pub use notify::*;
 
 use chrono::{prelude::*, Duration};
 use clap::ArgMatches;
