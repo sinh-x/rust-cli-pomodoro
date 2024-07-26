@@ -85,7 +85,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         spawn_uds_input_handler(uds_input_tx, server_tx, server_rx);
                     Some(server_uds)
                 }
-                None => None,
+                None => {
+                    error!("main:Failed to create or connect to server UDS");
+                    std::process::exit(1);
+                }
             };
 
             // Main loop to handle user input

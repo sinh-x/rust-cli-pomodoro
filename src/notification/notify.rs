@@ -110,10 +110,10 @@ async fn notify_desktop(summary_message: &'static str, body_message: &'static st
         .sound_name("message-new-instant");
 
     // Stop mpd from playing
-    let _ = Command::new("mpc")
-        .arg("stop")
+    debug!("Running pomodoro_notify script");
+    let _ = Command::new("/home/sinh/.config/sinh-x-local/pomodoro_notify")
         .output()
-        .expect("Failed to stop mpd");
+        .expect("Failed to run fish script");
 
     notification
         .show()
