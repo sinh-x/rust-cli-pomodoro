@@ -1,11 +1,11 @@
 pub(crate) mod archived_notification;
 pub(crate) mod notify;
 
-
 use chrono::{prelude::*, Duration};
 use clap::ArgMatches;
 use gluesql::core::data::Value;
 use gluesql::prelude::Row;
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::sync::Arc;
 use tabled::Tabled;
@@ -17,7 +17,7 @@ use crate::error::NotificationError;
 use crate::{ArcGlue, ArcTaskMap};
 
 /// The notification schema used to store to database
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Notification {
     id: u16,
     description: String,
