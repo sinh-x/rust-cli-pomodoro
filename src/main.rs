@@ -3,6 +3,7 @@ use clap_complete::generate;
 use gluesql::prelude::{Glue, MemoryStorage};
 use std::collections::HashMap;
 use std::error::Error;
+use std::fs;
 use std::io::{self};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -84,6 +85,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
             let path =
                 Path::new("/home/sinh/.local/share/applications/sinh-x/pomodoro/sled_databbase");
+            if let Some(parent_path) = path.parent() {
+                fs::create_dir_all(parent_path)?;
+            } else {
+                panic!(
+                    "could not create parent directory for sled database: {}",
+                    path.display()
+                )
+            }
             let sled_store = SledStore::new(&path).unwrap();
 
             let glue = initialize_db().await;
