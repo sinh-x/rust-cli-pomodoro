@@ -19,6 +19,7 @@ const SOCKET_CLIENT_ADDR: &str = "rust-cli-pomodoro-client.sock";
 
 const CHUNK: usize = 2048;
 
+#[derive(Debug)]
 pub enum UdsType {
     Server,
     Client,
@@ -247,12 +248,15 @@ pub async fn create_server_uds() -> Result<Option<UnixDatagram>, std::io::Error>
             debug!("create_server_uds called okay");
             if e.kind() == std::io::ErrorKind::Other && e.to_string() == "Server is already running"
             {
-                eprintln!("Server is already running");
+                error!("Server is already running");
                 return Err(e);
             } else {
                 if e.kind() == ErrorKind::ConnectionRefused {
                     // Server is not running, create a new server with should_remove set to true
-                    match create_uds_address(UdsType::Server, false) {
+                    debug!(
+                        "Server is not running, create a new server with should_remove set to true"
+                    );
+                    match create_uds_address(UdsType::Server, true) {
                         Ok(addr) => addr,
                         Err(e) => {
                             error!("An error occurred when creating the UDS address: {}", e);
@@ -334,6 +338,8 @@ async fn detect_address_in_use() -> Result<bool, std::io::Error> {
 }
 
 fn create_uds_address(r#type: UdsType, should_remove: bool) -> std::io::Result<PathBuf> {
+    debug!("create_uds_address: {:?} - {}", &r#type, &should_remove);
+
     let path = get_uds_address(r#type);
 
     if path.exists() {
