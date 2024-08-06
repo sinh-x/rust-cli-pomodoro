@@ -4,6 +4,7 @@ use gluesql::prelude::{Glue, MemoryStorage};
 use std::collections::HashMap;
 use std::error::Error;
 use std::io::{self};
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tokio::time::sleep;
 use tokio::{net::UnixDatagram, sync::mpsc};
@@ -19,12 +20,14 @@ mod ipc;
 mod line_handler;
 mod logging;
 mod report;
+mod sled_databbase;
 
 use crate::error::ConfigurationError;
 use crate::ipc::{create_client_uds, create_server_uds, Bincodec, MessageRequest, MessageResponse};
 use crate::notification::archived_notification;
 use crate::notification::notify::{notify_break, notify_work};
 use crate::notification::Notification;
+use crate::sled_databbase::{NotificationSled, SledStore};
 use crate::{
     command::{handler, util, CommandType},
     ipc::{get_uds_address, UdsType},
@@ -74,6 +77,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     logging::initialize_logging();
     debug!("debug test, start pomodoro...");
 
+    let path = Path::new("/home/sinh/.local/share/applications/sinh-x/pomodoro/sled_databbase");
+    let sled_store = SledStore::new(&path).unwrap();
+
     let command_type = detect_command_type().await?;
     match command_type {
         CommandType::StartUp(config) => {
@@ -121,6 +127,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                         &glue,
                         &config,
                         &server_tx,
+                        &sled_store,
                     )
                     .await
                     {
@@ -161,11 +168,12 @@ async fn handle_user_input(
     glue: &ArcGlue,
     config: &Arc<Configuration>,
     server_tx: &Option<Arc<UnixDatagram>>,
+    sled_store: &SledStore,
 ) -> Result<(), Box<dyn Error>> {
     let input = user_input.input.as_str();
     debug!("Input: {:?}", input);
 
-    match handler::user_input::handle(input, id_manager, hash_map, glue, config).await {
+    match handler::user_input::handle(input, id_manager, hash_map, glue, config, sled_store).await {
         Ok(mut output) => match user_input.source {
             InputSource::StandardInput => {}
             InputSource::UnixDomainSocket => {

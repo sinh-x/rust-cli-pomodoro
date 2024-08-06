@@ -17,9 +17,10 @@ use crate::command::util;
 use crate::command::{self, action::ActionType};
 use crate::error::UserInputHandlerError;
 use crate::notification::notify::notify_work;
-use crate::notification::{delete_notification, get_new_notification};
+use crate::notification::{delete_notification, get_new_notification, get_new_notification_sled};
 use crate::{configuration::Configuration, ArcGlue};
 use crate::{db, spawn_notification, ArcTaskMap};
+use crate::{NotificationSled, SledStore};
 
 type HandleUserInputResult = result::Result<(), UserInputHandlerError>;
 
@@ -29,6 +30,7 @@ pub async fn handle(
     notification_task_map: &ArcTaskMap,
     glue: &ArcGlue,
     configuration: &Arc<Configuration>,
+    sled_store: &SledStore,
 ) -> Result<OutputAccumulater, UserInputHandlerError> {
     let command = command::get_main_command();
     let input = user_input.split_whitespace();
@@ -61,6 +63,7 @@ pub async fn handle(
                 glue,
                 id_manager,
                 &mut output_accumulator,
+                sled_store,
             )
             .await?;
         }
@@ -84,7 +87,9 @@ pub async fn handle(
             )
             .await?;
         }
-        ActionType::List => handle_list(sub_matches, glue, &mut output_accumulator).await?,
+        ActionType::List => {
+            handle_list(sub_matches, glue, &mut output_accumulator, sled_store).await?
+        }
         ActionType::Test => handle_test(configuration, &mut output_accumulator).await?,
         ActionType::History => handle_history(sub_matches, glue, &mut output_accumulator).await?,
         ActionType::Exit => process::exit(0),
@@ -101,12 +106,16 @@ async fn handle_create(
     glue: &ArcGlue,
     id_manager: &mut u16,
     output_accumulator: &mut OutputAccumulater,
+    sled_store: &SledStore,
 ) -> HandleUserInputResult {
     let notification = get_new_notification(matches, id_manager, Utc::now(), configuration.clone())
+        .map_err(UserInputHandlerError::NotificationError)?;
+    let notification_new = get_new_notification_sled(matches, Utc::now(), configuration.clone())
         .map_err(UserInputHandlerError::NotificationError)?;
 
     let id = notification.get_id();
     db::create_notification(glue.clone(), &notification).await;
+    sled_store.create_notification(&notification_new);
 
     let handle = spawn_notification(
         configuration.clone(),
@@ -241,12 +250,38 @@ async fn handle_list(
     sub_matches: &ArgMatches,
     glue: &ArcGlue,
     output_accumulator: &mut OutputAccumulater,
+    sled_store: &SledStore,
 ) -> HandleUserInputResult {
     debug!("Message::List called!");
     let notifications = db::list_notification(glue.clone()).await;
     debug!("Message::List done");
 
+    let notification_sleds = sled_store.list_notifications();
+    let mut main_table_sled = match sled_store.list_notifications() {
+        Ok(sleds) => sleds.table(),
+        Err(e) => {
+            output_accumulator.push(OutputType::Error, format!("Error: {}", e));
+            return Ok(());
+        }
+    };
+
     let mut main_table = notifications.table();
+
+    let styled_table = main_table_sled
+        .with(
+            Style::modern()
+                .off_horizontal()
+                .horizontals([HorizontalLine::new(1, Style::modern().get_horizontal())]),
+        )
+        .with(Modify::new(Segment::all()).with(Alignment::center()));
+
+    let table_sled: String = if !sub_matches.get_flag("percentage") {
+        styled_table
+            .with(Disable::column(ByColumnName::new("percentage")))
+            .to_string()
+    } else {
+        styled_table.to_string()
+    };
 
     let styled_table = main_table
         .with(
@@ -265,6 +300,7 @@ async fn handle_list(
     };
 
     output_accumulator.push(OutputType::Info, format!("\n{}", table));
+    output_accumulator.push(OutputType::Info, format!("\n{}", table_sled));
     output_accumulator.push(OutputType::Println, String::from("List succeed"));
 
     Ok(())

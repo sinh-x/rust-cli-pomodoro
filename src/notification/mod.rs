@@ -14,6 +14,7 @@ use crate::command::util;
 use crate::configuration::Configuration;
 use crate::db;
 use crate::error::NotificationError;
+use crate::NotificationSled;
 use crate::{ArcGlue, ArcTaskMap};
 
 /// The notification schema used to store to database
@@ -288,6 +289,36 @@ pub fn get_new_notification(
         break_time,
         created_at,
         description,
+    ))
+}
+
+pub fn get_new_notification_sled(
+    matches: &ArgMatches,
+    created_at: DateTime<Utc>,
+    configuration: Arc<Configuration>,
+) -> Result<NotificationSled, NotificationError> {
+    let (work_time, break_time, description) =
+        util::parse_work_and_break_time(matches, Some(&configuration))
+            .map_err(NotificationError::NewNotification)?;
+
+    // should never panic on unwrap as parse_work_and_break_time already handles it
+    let work_time = work_time.unwrap();
+    let break_time = break_time.unwrap();
+    let description = description.unwrap();
+
+    debug!("work_time: {}", work_time);
+    debug!("break_time: {}", break_time);
+    debug!("description: {}", description);
+
+    if work_time == 0 && break_time == 0 {
+        return Err(NotificationError::EmptyTimeValues);
+    }
+
+    Ok(NotificationSled::new(
+        description,
+        work_time,
+        break_time,
+        created_at,
     ))
 }
 
