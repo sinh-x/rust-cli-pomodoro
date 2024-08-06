@@ -5,17 +5,19 @@ use std::process;
 use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 
+use crate::Error;
+
 /// Handles all cli input events with rustyline
-pub fn handle(tx: Sender<UserInput>) -> JoinHandle<()> {
-    let mut rl = DefaultEditor::new().unwrap_or_else(|err| {
-        println!(
+pub fn handle(tx: Sender<UserInput>) -> Result<JoinHandle<()>, Box<dyn Error + Send + Sync>> {
+    let mut rl = DefaultEditor::new().map_err(|err| {
+        eprintln!(
             "Something went wrong. Could not initiate editor. Error: {}",
             err
         );
-        process::exit(1);
-    });
+        err
+    })?;
 
-    tokio::spawn(async move {
+    Ok(tokio::spawn(async move {
         loop {
             // set up what to show at the beginning of the line
             let readline = rl.readline("> ");
@@ -34,16 +36,18 @@ pub fn handle(tx: Sender<UserInput>) -> JoinHandle<()> {
                 }
                 // handles the CTRL + C event
                 Err(ReadlineError::Interrupted) => {
-                    process::exit(0);
+                    println!("CTRL-C");
+                    break;
                 }
                 Err(ReadlineError::Eof) => {
-                    process::exit(0);
+                    println!("CTRL-D");
+                    break;
                 }
                 Err(err) => {
-                    println!("Something went wrong. Error: {:?}", err);
-                    process::exit(1);
+                    eprintln!("Something went wrong. Error: {:?}", err);
+                    break;
                 }
             }
         }
-    })
+    }))
 }

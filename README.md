@@ -237,3 +237,10 @@ It depends on [notify-rust](https://github.com/hoodie/notify-rust) support, so L
 
 ### IPC
 Currently Linux and Mac are supported (as pomodoro used unix domain socket)
+
+
+## Sinh-x changes
+
+### 1.5.0
+
+- Added auto call 

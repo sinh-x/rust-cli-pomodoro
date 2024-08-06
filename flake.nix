@@ -37,6 +37,9 @@
           buildInputs = [pkgs.openssl];
           nativeBuildInputs = [pkgs.cargo pkgs.rustc pkgs.pkg-config pkgs.openssl];
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [pkgs.openssl];
+          shellHook = ''
+            exec fish
+          '';
         };
 
         apps.rust_cli_pomodoro = {

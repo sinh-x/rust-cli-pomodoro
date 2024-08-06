@@ -56,7 +56,21 @@ pub enum InputSource {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() {
+    match run().await {
+        Ok(_) => {
+            println!("Program completed successfully.");
+            std::process::exit(0);
+        }
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            println!("Exiting the program due to an error.");
+            std::process::exit(1);
+        }
+    }
+}
+
+async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     logging::initialize_logging();
     debug!("debug test, start pomodoro...");
 
@@ -72,8 +86,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
             // Start handling stdin input in a separate task
             let stdin_tx = user_input_tx.clone();
-            let _input_handle = line_handler::handle(stdin_tx);
-
+            let stdin_tx = user_input_tx.clone();
+            let _input_handle = match line_handler::handle(stdin_tx) {
+                Ok(handle) => Some(handle),
+                Err(_) => None, // Ignore errors from stdin
+            };
             // Start handling UDS input
             let uds_input_tx = user_input_tx.clone();
             let server_uds_option = create_server_uds().await.unwrap();
@@ -268,7 +285,7 @@ fn spawn_uds_input_handler(
     uds_tx: Sender<UserInput>,
     server_tx: Arc<UnixDatagram>,
     server_rx: Arc<UnixDatagram>,
-) -> JoinHandle<()> {
+) -> JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>> {
     tokio::spawn(async move {
         let rx = server_rx;
         let mut buf = vec![0u8; 256];
@@ -293,7 +310,11 @@ fn spawn_uds_input_handler(
                     let user_input: UserInput = MessageRequest::into(message);
                     debug!("user_input: {:?}", user_input);
 
-                    uds_tx.send(user_input).await.unwrap();
+                    // Line 296
+                    if let Err(e) = uds_tx.send(user_input).await {
+                        eprintln!("Error sending user input: {}", e);
+                        return Err(e.into());
+                    }
                 }
                 UdsMessage::Internal(message) => {
                     debug!("internal_message ok, {:?}", message);
@@ -311,5 +332,6 @@ fn spawn_uds_input_handler(
                 }
             }
         }
+        Ok(())
     })
 }

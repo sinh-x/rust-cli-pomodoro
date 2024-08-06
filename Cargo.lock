@@ -1767,7 +1767,7 @@ dependencies = [
 
 [[package]]
 name = "rust_cli_pomodoro"
-version = "1.4.5-rc.2"
+version = "1.5.0"
 dependencies = [
  "bincode",
  "chrono",
