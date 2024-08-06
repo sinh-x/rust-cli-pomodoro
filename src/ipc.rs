@@ -64,10 +64,12 @@ pub enum MessageRequest {
     Create {
         work: Option<u16>,
         r#break: Option<u16>,
+        desciption: Option<String>,
     },
     Queue {
         work: Option<u16>,
         r#break: Option<u16>,
+        desciption: Option<String>,
     },
     Delete {
         id: u16,
@@ -89,7 +91,12 @@ impl Bincodec for MessageRequest {
 impl From<MessageRequest> for UserInput {
     fn from(request: MessageRequest) -> Self {
         let input = match request {
-            MessageRequest::Create { work, r#break } => {
+            MessageRequest::Create {
+                work,
+                r#break,
+                //TODO: implement description
+                desciption: _,
+            } => {
                 let mut data = format!("{} ", String::from(ActionType::Create));
 
                 if let Some(val) = work {
@@ -102,7 +109,12 @@ impl From<MessageRequest> for UserInput {
 
                 data
             }
-            MessageRequest::Queue { work, r#break } => {
+            MessageRequest::Queue {
+                work,
+                r#break,
+                //TODO: implement description
+                desciption: _,
+            } => {
                 let mut data = format!("{} ", String::from(ActionType::Queue));
 
                 if let Some(val) = work {

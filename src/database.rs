@@ -181,7 +181,7 @@ pub async fn list_archived_notification(glue: ArcGlue) -> Vec<ArchivedNotificati
 }
 
 pub async fn delete_and_archive_notification(glue: ArcGlue, id: u16) {
-    archive_notification(glue.clone(), id).await;
+    let _ = archive_notification(glue.clone(), id).await;
     delete_notification(glue.clone(), id).await;
 }
 

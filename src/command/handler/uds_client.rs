@@ -47,6 +47,7 @@ async fn handle_create(socket: UnixDatagram, sub_matches: &ArgMatches) -> Handle
             UdsMessage::Public(MessageRequest::Create {
                 work: work_time,
                 r#break: break_time,
+                desciption: description,
             })
             .encode()
             .map_err(UdsHandlerError::EncodeFailed)?
@@ -70,6 +71,7 @@ async fn handle_queue(socket: UnixDatagram, sub_matches: &ArgMatches) -> HandleU
             UdsMessage::Public(MessageRequest::Queue {
                 work: work_time,
                 r#break: break_time,
+                desciption: description,
             })
             .encode()
             .map_err(UdsHandlerError::EncodeFailed)?

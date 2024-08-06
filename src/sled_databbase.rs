@@ -1,16 +1,11 @@
 use chrono::{prelude::*, Duration};
 use serde::{Deserialize, Serialize};
 use serde_json::{from_slice, to_vec};
-use sled::{Db, IVec};
+use sled::Db;
 use std::borrow::Cow;
 use std::path::Path;
-use std::sync::Arc;
 use tabled::Tabled;
 use uuid::Uuid;
-
-use crate::command::util;
-use crate::configuration::Configuration;
-use crate::error::NotificationError;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NotificationSled {
@@ -44,6 +39,8 @@ impl<'a> NotificationSled {
         }
     }
 
+    //TODO: review this function
+    #[allow(dead_code)]
     pub fn get_id(&self) -> Uuid {
         self.id
     }
@@ -55,6 +52,8 @@ impl<'a> NotificationSled {
         last_expired_at - duration
     }
 
+    #[allow(dead_code)]
+    //TODO: review this function
     pub fn get_values(
         &'a self,
     ) -> (
@@ -208,6 +207,8 @@ impl SledStore {
         Ok(())
     }
 
+    #[allow(dead_code)]
+    //TODO: review this function
     pub fn get(&self, uuid: Uuid) -> Result<Option<NotificationSled>, sled::Error> {
         let key = uuid.as_bytes();
         match self.db.get(key)? {
@@ -219,6 +220,8 @@ impl SledStore {
         }
     }
 
+    #[allow(dead_code)]
+    //TODO: review this function
     pub fn delete(&self, uuid: Uuid) -> Result<(), sled::Error> {
         let key = uuid.as_bytes();
         self.db.remove(key)?;
@@ -236,6 +239,20 @@ impl SledStore {
     }
 
     pub fn list_notifications(&self) -> Result<Vec<NotificationSled>, sled::Error> {
+        let mut notifications = Vec::new();
+        for item in self.db.iter() {
+            let (_, value) = item?;
+            let notification: NotificationSled = from_slice(&value).unwrap();
+            if notification.work_expired_at > Utc::now()
+                || notification.break_expired_at > Utc::now()
+            {
+                notifications.push(notification);
+            }
+        }
+        Ok(notifications)
+    }
+
+    pub fn list_all_notifications(&self) -> Result<Vec<NotificationSled>, sled::Error> {
         let mut notifications = Vec::new();
         for item in self.db.iter() {
             let (_, value) = item?;

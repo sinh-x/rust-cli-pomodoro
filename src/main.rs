@@ -75,15 +75,16 @@ async fn main() {
 
 async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     logging::initialize_logging();
+
     debug!("debug test, start pomodoro...");
-
-    let path = Path::new("/home/sinh/.local/share/applications/sinh-x/pomodoro/sled_databbase");
-    let sled_store = SledStore::new(&path).unwrap();
-
     let command_type = detect_command_type().await?;
     match command_type {
         CommandType::StartUp(config) => {
             info!("Starting server...");
+
+            let path =
+                Path::new("/home/sinh/.local/share/applications/sinh-x/pomodoro/sled_databbase");
+            let sled_store = SledStore::new(&path).unwrap();
 
             let glue = initialize_db().await;
             let mut id_manager: u16 = 1;
@@ -91,7 +92,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             let (user_input_tx, mut user_input_rx) = mpsc::channel::<UserInput>(64);
 
             // Start handling stdin input in a separate task
-            let stdin_tx = user_input_tx.clone();
             let stdin_tx = user_input_tx.clone();
             let _input_handle = match line_handler::handle(stdin_tx) {
                 Ok(handle) => Some(handle),
@@ -343,6 +343,5 @@ fn spawn_uds_input_handler(
                 }
             }
         }
-        Ok(())
     })
 }

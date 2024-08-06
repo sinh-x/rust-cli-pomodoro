@@ -18,9 +18,9 @@ use crate::command::{self, action::ActionType};
 use crate::error::UserInputHandlerError;
 use crate::notification::notify::notify_work;
 use crate::notification::{delete_notification, get_new_notification, get_new_notification_sled};
+use crate::SledStore;
 use crate::{configuration::Configuration, ArcGlue};
 use crate::{db, spawn_notification, ArcTaskMap};
-use crate::{NotificationSled, SledStore};
 
 type HandleUserInputResult = result::Result<(), UserInputHandlerError>;
 
@@ -91,7 +91,9 @@ pub async fn handle(
             handle_list(sub_matches, glue, &mut output_accumulator, sled_store).await?
         }
         ActionType::Test => handle_test(configuration, &mut output_accumulator).await?,
-        ActionType::History => handle_history(sub_matches, glue, &mut output_accumulator).await?,
+        ActionType::History => {
+            handle_history(sub_matches, glue, &mut output_accumulator, sled_store).await?
+        }
         ActionType::Exit => process::exit(0),
         ActionType::Clear => print!("\x1B[2J\x1B[1;1H"),
     }
@@ -115,7 +117,7 @@ async fn handle_create(
 
     let id = notification.get_id();
     db::create_notification(glue.clone(), &notification).await;
-    sled_store.create_notification(&notification_new);
+    let _ = sled_store.create_notification(&notification_new);
 
     let handle = spawn_notification(
         configuration.clone(),
@@ -256,7 +258,6 @@ async fn handle_list(
     let notifications = db::list_notification(glue.clone()).await;
     debug!("Message::List done");
 
-    let notification_sleds = sled_store.list_notifications();
     let mut main_table_sled = match sled_store.list_notifications() {
         Ok(sleds) => sleds.table(),
         Err(e) => {
@@ -310,6 +311,7 @@ async fn handle_history(
     sub_matches: &ArgMatches,
     glue: &ArcGlue,
     output_accumulator: &mut OutputAccumulater,
+    sled_store: &SledStore,
 ) -> HandleUserInputResult {
     if sub_matches.get_flag("clear") {
         debug!("Message:Clear history called!");
@@ -324,6 +326,23 @@ async fn handle_history(
         let archived_notifications = db::list_archived_notification(glue.clone()).await;
         debug!("Message:History done!");
 
+        let mut main_table_sled = match sled_store.list_all_notifications() {
+            Ok(sleds) => sleds.table(),
+            Err(e) => {
+                output_accumulator.push(OutputType::Error, format!("Error: {}", e));
+                return Ok(());
+            }
+        };
+
+        let table_sled = main_table_sled
+            .with(
+                Style::modern()
+                    .off_horizontal()
+                    .horizontals([HorizontalLine::new(1, Style::modern().get_horizontal())]),
+            )
+            .with(Modify::new(Segment::all()).with(Alignment::center()))
+            .to_string();
+
         let table = archived_notifications
             .table()
             .with(
@@ -334,6 +353,7 @@ async fn handle_history(
             .with(Modify::new(Segment::all()).with(Alignment::center()))
             .to_string();
         output_accumulator.push(OutputType::Info, format!("\n{}", table));
+        output_accumulator.push(OutputType::Info, format!("\n{}", table_sled));
         output_accumulator.push(OutputType::Println, String::from("History succeed"));
     }
 

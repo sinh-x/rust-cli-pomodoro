@@ -1,7 +1,6 @@
 use crate::{InputSource, UserInput};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
-use std::process;
 use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 
