@@ -1,51 +1,60 @@
 {
-  description = "Rust cli pomodoro";
+  description = "Sinh-x-gitstatus";
+
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
+    # NixPkgs (nixos-unstable)
+    nixpkgs = {
+      url = "github:nixos/nixpkgs/nixos-unstable";
+    };
+
+    # nixvim nix configuration
+    nixvim = {
+      url = "github:nix-community/nixvim";
+      # url = "git+file:///Users/khaneliman/Documents/github/nixvim";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    pre-commit-hooks-nix.url = "github:cachix/pre-commit-hooks.nix";
+
+    # Snowfall Lib
+    snowfall-lib = {
+      url = "github:snowfallorg/lib";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # Snowfall Flake
+    snowfall-flake = {
+      url = "github:snowfallorg/flake";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
-  outputs = {
-    self,
-    nixpkgs,
-    flake-utils,
-  }:
-    flake-utils.lib.eachDefaultSystem (
-      system: let
-        pkgs = nixpkgs.legacyPackages.${system};
-      in {
-        defaultPackage = pkgs.rustPlatform.buildRustPackage rec {
-          pname = "rust_cli_pomodoro";
-          version = "1.4.5-rc.2";
-          src = ./.;
-          cargoSha256 = "sha256-nh7hZ8uD2CnZmFo9sLGVcf1WLQCKmAnGOOFgqxBofzg=";
-          buildInputs = [pkgs.openssl];
-          nativeBuildInputs = [pkgs.cargo pkgs.rustc pkgs.pkg-config pkgs.openssl];
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [pkgs.openssl];
 
-          buildPhase = ''
-            cargo build --release
-          '';
+  outputs =
+    inputs:
+    let
+      inherit (inputs) snowfall-lib;
 
-          installPhase = ''
-            mkdir -p $out/bin
-            cp target/release/pomodoro $out/bin
-            cp target/release/daemon $out/bin
-          '';
+      lib = snowfall-lib.mkLib {
+        inherit inputs;
+        src = ./.;
+
+        snowfall = {
+          meta = {
+            name = "sinh-x-pomodoro";
+            title = "Sinh-x-pomodoro";
+          };
+
+          namespace = "sinh-x";
         };
-
-        devShell = pkgs.mkShell {
-          buildInputs = [pkgs.openssl];
-          nativeBuildInputs = [pkgs.cargo pkgs.rustc pkgs.pkg-config pkgs.openssl];
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [pkgs.openssl];
-          shellHook = ''
-            exec fish
-          '';
+      };
+    in
+    lib.mkFlake {
+      alias = {
+        packages = {
+          default = "sinh-x-pomodoro";
         };
+      };
 
-        apps.rust_cli_pomodoro = {
-          type = "app";
-          program = "${self.defaultPackage.${system}}/bin/pomodoro";
-        };
-      }
-    );
+      outputs-builder = channels: { formatter = channels.nixpkgs.nixfmt-rfc-style; };
+    };
 }
