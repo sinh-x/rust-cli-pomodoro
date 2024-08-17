@@ -558,9 +558,9 @@ dependencies = [
 
 [[package]]
 name = "clap_complete"
-version = "4.5.16"
+version = "4.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c677cd0126f3026d8b093fa29eae5d812fde5c05bc66dbb29d0374eea95113a"
+checksum = "1ee158892bd7ce77aa15c208abbdb73e155d191c287a659b57abd5adb92feb03"
 dependencies = [
  "clap",
 ]
@@ -2232,32 +2232,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust_cli_pomodoro"
-version = "1.5.2"
-dependencies = [
- "bincode",
- "chrono",
- "chrono-tz",
- "clap",
- "clap_complete",
- "colored",
- "env_logger",
- "gluesql",
- "lmdb",
- "log",
- "notify-rust",
- "reqwest",
- "rustyline",
- "serde",
- "serde_derive",
- "serde_json",
- "sled",
- "tabled",
- "tokio",
- "uuid",
-]
-
-[[package]]
 name = "rust_decimal"
 version = "1.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2496,6 +2470,32 @@ name = "simdutf8"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27f6278552951f1f2b8cf9da965d10969b2efdea95a6ec47987ab46edfe263a"
+
+[[package]]
+name = "sinh-x-pomodoro"
+version = "1.5.3"
+dependencies = [
+ "bincode",
+ "chrono",
+ "chrono-tz",
+ "clap",
+ "clap_complete",
+ "colored",
+ "env_logger",
+ "gluesql",
+ "lmdb",
+ "log",
+ "notify-rust",
+ "reqwest",
+ "rustyline",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "sled",
+ "tabled",
+ "tokio",
+ "uuid",
+]
 
 [[package]]
 name = "siphasher"

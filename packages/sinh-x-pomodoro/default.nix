@@ -12,7 +12,7 @@
 }:
 pkgs.rustPlatform.buildRustPackage {
   pname = "sinh-x-pomodoro";
-  version = "1.5.2";
+  version = "1.5.4";
   src = ../..;
   cargoSha256 = "sha256-G1qKx4HlgCGx9H3hW2Fs9jnC787z7MnwvABqpgT18OA=";
   buildInputs = with pkgs; [

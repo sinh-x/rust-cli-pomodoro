@@ -75,6 +75,7 @@ pub async fn handle(
                 glue,
                 id_manager,
                 &mut output_accumulator,
+                &sled_store,
             )
             .await?;
         }
@@ -160,9 +161,13 @@ async fn handle_queue(
 
     let notification = get_new_notification(matches, id_manager, created_at, configuration.clone())
         .map_err(UserInputHandlerError::NotificationError)?;
+    let notification_new = get_new_notification_sled(matches, created_at, configuration.clone())
+        .map_err(UserInputHandlerError::NotificationError)?;
+
     let id = notification.get_id();
     db::create_notification(glue.clone(), &notification).await;
     let _ = sled_store.create_notification(&notification_new);
+    debug!("Queue notification: {:?}", "Testing");
 
     notification_task_map.lock().unwrap().insert(
         id,
