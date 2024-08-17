@@ -1,3 +1,4 @@
+use chrono::{prelude::*, Duration};
 use clap_complete::generate;
 use gluesql::prelude::{Glue, MemoryStorage};
 use std::collections::HashMap;
@@ -272,7 +273,8 @@ pub fn spawn_notification(
         let (id, _, work_time, break_time, _, _, _) = notification.get_values();
 
         if work_time > 0 {
-            let wt = notification.get_next_notify();
+            let duration = notification.work_expired_at - Utc::now();
+            let wt = duration.num_seconds().max(0) as u64;
             match wt {
                 0 => debug!("spawn_notification: id ({}) no wait for work!", id),
                 1.. => {
@@ -280,21 +282,22 @@ pub fn spawn_notification(
                         "spawn_notification: id ({}), work time ({}) sleep {:?} secs",
                         id, work_time, wt
                     );
-                    sleep(tokio::time::Duration::from_secs(wt)).await
+                    sleep(tokio::time::Duration::from_secs(wt)).await;
+                    // TODO(young): handle notify report err
+                    let result = notify_work(&configuration).await;
+                    if let Ok(report) = result {
+                        info!("\n{}", report);
+                        println!("Notification report generated");
+                        util::write_output(&mut io::stdout());
+                    }
                 }
             }
-
-            // TODO(young): handle notify report err
-            let result = notify_work(&configuration).await;
-            if let Ok(report) = result {
-                info!("\n{}", report);
-                println!("Notification report generated");
-                util::write_output(&mut io::stdout());
-            }
+            debug!("spawn_notification: id ({}) work time done!", id);
         }
 
         if break_time > 0 {
-            let bt = notification.get_next_notify();
+            let duration = notification.break_expired_at - Utc::now();
+            let bt = duration.num_seconds().max(0) as u64;
             match bt {
                 0 => debug!("spawn_notification: id ({}) no wait for break!", id),
                 1.. => {
@@ -302,20 +305,18 @@ pub fn spawn_notification(
                         "spawn_notification: id ({}), break time ({}) sleep {:?} secs",
                         id, break_time, bt
                     );
-                    sleep(tokio::time::Duration::from_secs(bt)).await
+                    sleep(tokio::time::Duration::from_secs(bt)).await;
+                    // TODO(young): handle notify report err
+                    let result = notify_break(&configuration).await;
+                    if let Ok(report) = result {
+                        info!("\n{}", report);
+                        println!("Notification report generated");
+                        util::write_output(&mut io::stdout());
+                    }
                 }
             }
-
-            // TODO(young): handle notify report err
-            let result = notify_break(&configuration).await;
-            if let Ok(report) = result {
-                info!("\n{}", report);
-                println!("Notification report generated");
-                util::write_output(&mut io::stdout());
-            }
+            debug!("spawn_notification: id ({}) break time done!", id);
         }
-
-        debug!("id: {}, notification work time done!", id);
     })
 }
 

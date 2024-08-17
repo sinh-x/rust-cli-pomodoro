@@ -9,13 +9,13 @@ use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NotificationSled {
-    id: Uuid,
-    description: String,
-    work_time: u16,
-    break_time: u16,
-    created_at: DateTime<Utc>,
-    work_expired_at: DateTime<Utc>,
-    break_expired_at: DateTime<Utc>,
+    pub id: Uuid,
+    pub description: String,
+    pub work_time: u16,
+    pub break_time: u16,
+    pub created_at: DateTime<Utc>,
+    pub work_expired_at: DateTime<Utc>,
+    pub break_expired_at: DateTime<Utc>,
 }
 
 impl<'a> NotificationSled {
@@ -52,9 +52,18 @@ impl<'a> NotificationSled {
         last_expired_at - duration
     }
 
-    pub fn get_next_notify(&self) -> u64 {
+    pub fn get_work_time(&self) -> u64 {
+        debug!("get_next_notify: id {}", self.id);
         if self.work_expired_at <= Utc::now() {
+            debug!(
+                "get_next_notify: id {} work expired_at {} before now ",
+                self.id, self.work_expired_at
+            );
             if self.break_expired_at <= Utc::now() {
+                debug!(
+                    "get_next_notify: id {} break expired_at {} before now ",
+                    self.id, self.break_expired_at
+                );
                 0
             } else {
                 let duration = self.break_expired_at - Utc::now();
@@ -65,6 +74,9 @@ impl<'a> NotificationSled {
             duration.num_seconds().max(0) as u64
         }
     }
+
+
+
 
     #[allow(dead_code)]
     //TODO: review this function

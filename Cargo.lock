@@ -2473,7 +2473,7 @@ checksum = "f27f6278552951f1f2b8cf9da965d10969b2efdea95a6ec47987ab46edfe263a"
 
 [[package]]
 name = "sinh-x-pomodoro"
-version = "1.5.4"
+version = "1.6.0"
 dependencies = [
  "bincode",
  "chrono",
