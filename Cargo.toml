@@ -1,6 +1,6 @@
 [package]
-name = "rust-cli-pomodoro"
-version = "1.4.5"
+name = "sinh-x-pomodoro"
+version = "1.6.0"
 authors = ["24seconds <24crazyoung@gmail.com>"]
 edition = "2021"
 rust-version = "1.59"
@@ -18,22 +18,33 @@ exclude = ["/assets"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.19.2", features = ["macros", "rt-multi-thread", "time", "sync"] }
-clap = "4.1.10"
+tokio = { version = "1.39", features = [
+  "macros",
+  "rt-multi-thread",
+  "time",
+  "sync",
+] }
+clap = "4.5"
 chrono = "0.4.22"
-chrono-tz=  "0.6.3"
-gluesql = { version ="0.13.1", default-features = false, features = ["memory-storage"] }
+chrono-tz = "0.9"
+gluesql = { version = "0.13.1", default-features = false, features = [
+  "memory-storage",
+] }
 notify-rust = "4.5.10"
-log = "0.4.17"
-env_logger = "0.9.1"
-tabled = { version = "0.10.0", features = ["color"]}
+log = "0.4"
+env_logger = "0.11"
+tabled = { version = "0.10.0", features = ["color"] }
 serde_json = "1.0.85"
-serde = "1.0.144"
-reqwest = { version = "0.11", features = ["json"] }
+serde = "1.0"
+serde_derive = "1.0.204"
+reqwest = { version = "0.12", features = ["json"] }
 colored = "2"
-bincode = { version = "2.0.0-rc.1", features = ["alloc"]}
+bincode = { version = "2.0.0-rc.1", features = ["alloc"] }
 clap_complete = "4.1.5"
-rustyline = "11.0.0"
+rustyline = "14.0.0"
+lmdb = "0.8"
+sled = "0.34"
+uuid = { version = "1.10", features = ["serde", "v4"] }
 
 [[bin]]
 name = "pomodoro"

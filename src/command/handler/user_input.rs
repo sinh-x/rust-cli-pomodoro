@@ -13,22 +13,22 @@ use tabled::{Alignment, Disable};
 use tabled::{Style, TableIteratorExt};
 
 use crate::command::output::{OutputAccumulater, OutputType};
-use crate::command::util;
 use crate::command::{self, action::ActionType};
 use crate::error::UserInputHandlerError;
+use crate::notification::get_new_notification_sled;
 use crate::notification::notify::notify_work;
-use crate::notification::{delete_notification, get_new_notification};
+use crate::SledStore;
 use crate::{configuration::Configuration, ArcGlue};
-use crate::{db, spawn_notification, ArcTaskMap};
+use crate::{spawn_notification, ArcTaskMap};
 
 type HandleUserInputResult = result::Result<(), UserInputHandlerError>;
 
 pub async fn handle(
     user_input: &str,
-    id_manager: &mut u16,
     notification_task_map: &ArcTaskMap,
     glue: &ArcGlue,
     configuration: &Arc<Configuration>,
+    sled_store: &SledStore,
 ) -> Result<OutputAccumulater, UserInputHandlerError> {
     let command = command::get_main_command();
     let input = user_input.split_whitespace();
@@ -58,9 +58,8 @@ pub async fn handle(
                 sub_matches,
                 configuration,
                 notification_task_map,
-                glue,
-                id_manager,
                 &mut output_accumulator,
+                sled_store,
             )
             .await?;
         }
@@ -69,24 +68,17 @@ pub async fn handle(
                 sub_matches,
                 configuration,
                 notification_task_map,
-                glue,
-                id_manager,
                 &mut output_accumulator,
+                &sled_store,
             )
             .await?;
         }
-        ActionType::Delete => {
-            handle_delete(
-                sub_matches,
-                notification_task_map,
-                glue,
-                &mut output_accumulator,
-            )
-            .await?;
-        }
-        ActionType::List => handle_list(sub_matches, glue, &mut output_accumulator).await?,
+        ActionType::Delete => {}
+        ActionType::List => handle_list(sub_matches, &mut output_accumulator, sled_store).await?,
         ActionType::Test => handle_test(configuration, &mut output_accumulator).await?,
-        ActionType::History => handle_history(sub_matches, glue, &mut output_accumulator).await?,
+        ActionType::History => {
+            handle_history(sub_matches, glue, &mut output_accumulator, sled_store).await?
+        }
         ActionType::Exit => process::exit(0),
         ActionType::Clear => print!("\x1B[2J\x1B[1;1H"),
     }
@@ -98,21 +90,20 @@ async fn handle_create(
     matches: &ArgMatches,
     configuration: &Arc<Configuration>,
     notification_task_map: &ArcTaskMap,
-    glue: &ArcGlue,
-    id_manager: &mut u16,
     output_accumulator: &mut OutputAccumulater,
+    sled_store: &SledStore,
 ) -> HandleUserInputResult {
-    let notification = get_new_notification(matches, id_manager, Utc::now(), configuration.clone())
+    let notification_new = get_new_notification_sled(matches, Utc::now(), configuration.clone())
         .map_err(UserInputHandlerError::NotificationError)?;
 
-    let id = notification.get_id();
-    db::create_notification(glue.clone(), &notification).await;
+    let _ = sled_store.create_notification(&notification_new);
+    let id = notification_new.get_id();
 
     let handle = spawn_notification(
         configuration.clone(),
         notification_task_map.clone(),
-        glue.clone(),
-        notification,
+        &sled_store,
+        notification_new,
     );
 
     notification_task_map.lock().unwrap().insert(id, handle);
@@ -132,32 +123,24 @@ async fn handle_queue(
     matches: &ArgMatches,
     configuration: &Arc<Configuration>,
     notification_task_map: &ArcTaskMap,
-    glue: &ArcGlue,
-    id_manager: &mut u16,
     output_accumulator: &mut OutputAccumulater,
+    sled_store: &SledStore,
 ) -> HandleUserInputResult {
-    let created_at = match db::read_last_expired_notification(glue.clone()).await {
-        Some(n) => {
-            debug!("last_expired_notification: {:?}", &n);
-
-            let (_, _, _, _, _, work_expired_at, break_expired_at) = n.get_values();
-            work_expired_at.max(break_expired_at)
-        }
-        None => Utc::now(),
-    };
-
-    let notification = get_new_notification(matches, id_manager, created_at, configuration.clone())
+    let created_at = sled_store.get_time_for_queue_notification()?;
+    let notification_new = get_new_notification_sled(matches, created_at, configuration.clone())
         .map_err(UserInputHandlerError::NotificationError)?;
-    let id = notification.get_id();
-    db::create_notification(glue.clone(), &notification).await;
+
+    let id = notification_new.get_id();
+    let _ = sled_store.create_notification(&notification_new);
+    debug!("Queue notification: {:?}", notification_new);
 
     notification_task_map.lock().unwrap().insert(
         id,
         spawn_notification(
             configuration.clone(),
             notification_task_map.clone(),
-            glue.clone(),
-            notification,
+            sled_store,
+            notification_new,
         ),
     );
     output_accumulator.push(
@@ -168,52 +151,6 @@ async fn handle_queue(
             id
         ),
     );
-
-    Ok(())
-}
-
-async fn handle_delete(
-    sub_matches: &ArgMatches,
-    notification_task_map: &ArcTaskMap,
-    glue: &ArcGlue,
-    output_accumulator: &mut OutputAccumulater,
-) -> HandleUserInputResult {
-    if sub_matches.contains_id("id") {
-        // delete one
-        let id =
-            util::parse_arg::<u16>(sub_matches, "id").map_err(UserInputHandlerError::ParseError)?;
-        debug!("Message::Delete called! {}", id);
-
-        match delete_notification(id, notification_task_map.clone(), glue.clone()).await {
-            Ok(_) => {
-                output_accumulator.push(
-                    OutputType::Println,
-                    format!(
-                        "[{}] Notification (id: {}) deleted",
-                        chrono::offset::Local::now(),
-                        id
-                    ),
-                );
-            }
-            Err(e) => {
-                output_accumulator.push(OutputType::Error, format!("Error: {}", e));
-            }
-        }
-        debug!("Message::Delete done");
-    } else {
-        // delete all
-        debug!("Message:DeleteAll called!");
-
-        for (_, handle) in notification_task_map.lock().unwrap().iter() {
-            handle.abort();
-        }
-        db::delete_and_archive_all_notification(glue.clone()).await;
-        output_accumulator.push(
-            OutputType::Println,
-            String::from("All Notifications deleted"),
-        );
-        debug!("Message::DeleteAll done");
-    }
 
     Ok(())
 }
@@ -239,16 +176,20 @@ async fn handle_test(
 
 async fn handle_list(
     sub_matches: &ArgMatches,
-    glue: &ArcGlue,
     output_accumulator: &mut OutputAccumulater,
+    sled_store: &SledStore,
 ) -> HandleUserInputResult {
-    debug!("Message::List called!");
-    let notifications = db::list_notification(glue.clone()).await;
-    debug!("Message::List done");
+    debug!("handle_list::List called!");
 
-    let mut main_table = notifications.table();
+    let mut main_table_sled = match sled_store.list_notifications() {
+        Ok(sleds) => sleds.table(),
+        Err(e) => {
+            output_accumulator.push(OutputType::Error, format!("Error: {}", e));
+            return Ok(());
+        }
+    };
 
-    let styled_table = main_table
+    let styled_table = main_table_sled
         .with(
             Style::modern()
                 .off_horizontal()
@@ -256,7 +197,7 @@ async fn handle_list(
         )
         .with(Modify::new(Segment::all()).with(Alignment::center()));
 
-    let table: String = if !sub_matches.get_flag("percentage") {
+    let table_sled: String = if !sub_matches.get_flag("percentage") {
         styled_table
             .with(Disable::column(ByColumnName::new("percentage")))
             .to_string()
@@ -264,42 +205,44 @@ async fn handle_list(
         styled_table.to_string()
     };
 
-    output_accumulator.push(OutputType::Info, format!("\n{}", table));
+    output_accumulator.push(OutputType::Info, format!("\n{}", table_sled));
     output_accumulator.push(OutputType::Println, String::from("List succeed"));
 
     Ok(())
 }
 
 async fn handle_history(
-    sub_matches: &ArgMatches,
-    glue: &ArcGlue,
+    _sub_matches: &ArgMatches,
+    _glue: &ArcGlue,
     output_accumulator: &mut OutputAccumulater,
+    sled_store: &SledStore,
 ) -> HandleUserInputResult {
-    if sub_matches.get_flag("clear") {
-        debug!("Message:Clear history called!");
-        db::delete_all_archived_notification(glue.clone()).await;
-        output_accumulator.push(
-            OutputType::Println,
-            String::from("All Notifications history deleted"),
-        );
-        debug!("Message::Clear history done");
-    } else {
-        debug!("Message:History called!");
-        let archived_notifications = db::list_archived_notification(glue.clone()).await;
-        debug!("Message:History done!");
+    debug!("Message:History called!");
+    debug!("Message:History done!");
 
-        let table = archived_notifications
-            .table()
-            .with(
-                Style::modern()
-                    .off_horizontal()
-                    .horizontals([HorizontalLine::new(1, Style::modern().get_horizontal())]),
-            )
-            .with(Modify::new(Segment::all()).with(Alignment::center()))
-            .to_string();
-        output_accumulator.push(OutputType::Info, format!("\n{}", table));
-        output_accumulator.push(OutputType::Println, String::from("History succeed"));
-    }
+    let mut main_table_sled = match sled_store.list_all_notifications() {
+        Ok(sleds) => {
+            let item_count = sleds.len();
+            debug!("History: sled items count {}", item_count);
+            sleds.table()
+        }
+        Err(e) => {
+            output_accumulator.push(OutputType::Error, format!("Error: {}", e));
+            return Ok(());
+        }
+    };
+
+    let table_sled = main_table_sled
+        .with(
+            Style::modern()
+                .off_horizontal()
+                .horizontals([HorizontalLine::new(1, Style::modern().get_horizontal())]),
+        )
+        .with(Modify::new(Segment::all()).with(Alignment::center()))
+        .to_string();
+
+    output_accumulator.push(OutputType::Info, format!("\n{}", table_sled));
+    output_accumulator.push(OutputType::Println, String::from("History succeed"));
 
     Ok(())
 }

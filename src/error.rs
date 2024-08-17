@@ -24,7 +24,6 @@ pub enum NotificationError {
     Discord(RequestError),
     EmptyConfiguration,
     NewNotification(ParseError),
-    DeletionFail(String),
     EmptyTimeValues,
 }
 
@@ -38,7 +37,6 @@ impl fmt::Display for NotificationError {
             NotificationError::NewNotification(e) => {
                 write!(f, "failed to get new notification: {}", e)
             }
-            NotificationError::DeletionFail(msg) => write!(f, "{}", msg),
             NotificationError::EmptyTimeValues => write!(
                 f,
                 "Cannot create a notification with 0 work time and 0 break time"
@@ -55,7 +53,6 @@ impl std::error::Error for NotificationError {
             NotificationError::Discord(ref e) => Some(e),
             NotificationError::EmptyConfiguration => None,
             NotificationError::NewNotification(ref e) => Some(e),
-            NotificationError::DeletionFail(_) => None,
             NotificationError::EmptyTimeValues => None,
         }
     }
@@ -175,6 +172,7 @@ pub enum UserInputHandlerError {
     ParseError(ParseError),
     CommandMatchError(clap::Error),
     NotificationError(NotificationError),
+    SledError(sled::Error),
 }
 
 impl fmt::Display for UserInputHandlerError {
@@ -188,7 +186,15 @@ impl fmt::Display for UserInputHandlerError {
                 write!(f, "failed to get matches: {}", e.render().ansi())
             }
             UserInputHandlerError::NotificationError(e) => write!(f, "{}", e),
+            UserInputHandlerError::SledError(e) => write!(f, "{}", e),
         }
+    }
+}
+
+// Implement the From trait for UserInputHandlerError to convert from sled::Error
+impl From<sled::Error> for UserInputHandlerError {
+    fn from(error: sled::Error) -> Self {
+        UserInputHandlerError::SledError(error)
     }
 }
 
@@ -199,6 +205,7 @@ impl std::error::Error for UserInputHandlerError {
             UserInputHandlerError::ParseError(ref e) => Some(e),
             UserInputHandlerError::CommandMatchError(ref e) => Some(e),
             UserInputHandlerError::NotificationError(ref e) => Some(e),
+            UserInputHandlerError::SledError(ref e) => Some(e),
         }
     }
 }

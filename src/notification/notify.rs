@@ -93,6 +93,7 @@ async fn notify_discord(message: &'static str, configuration: &Arc<Configuration
     resp.map(|_| ()).map_err(NotificationError::Discord)
 }
 
+use std::process::Command;
 /// notify_desktop send notification to desktop.
 /// use notify-rust library for desktop notification
 async fn notify_desktop(summary_message: &'static str, body_message: &'static str) -> NotifyResult {
@@ -107,6 +108,12 @@ async fn notify_desktop(summary_message: &'static str, body_message: &'static st
     notification
         .hint(Hint::Category("im.received".to_owned()))
         .sound_name("message-new-instant");
+
+    // Stop mpd from playing
+    debug!("Running pomodoro_notify script");
+    let _ = Command::new("/home/sinh/.config/sinh-x-local/pomodoro_notify")
+        .output()
+        .expect("Failed to run fish script");
 
     notification
         .show()

@@ -39,7 +39,7 @@ pub async fn handle(matches: ArgMatches, socket: UnixDatagram) -> HandleUdsResul
 }
 
 async fn handle_create(socket: UnixDatagram, sub_matches: &ArgMatches) -> HandleUdsResult {
-    let (work_time, break_time) =
+    let (work_time, break_time, description) =
         util::parse_work_and_break_time(sub_matches, None).map_err(UdsHandlerError::ParseError)?;
 
     socket
@@ -47,6 +47,7 @@ async fn handle_create(socket: UnixDatagram, sub_matches: &ArgMatches) -> Handle
             UdsMessage::Public(MessageRequest::Create {
                 work: work_time,
                 r#break: break_time,
+                desciption: description,
             })
             .encode()
             .map_err(UdsHandlerError::EncodeFailed)?
@@ -61,7 +62,7 @@ async fn handle_create(socket: UnixDatagram, sub_matches: &ArgMatches) -> Handle
 }
 
 async fn handle_queue(socket: UnixDatagram, sub_matches: &ArgMatches) -> HandleUdsResult {
-    let (work_time, break_time) =
+    let (work_time, break_time, description) =
         util::parse_work_and_break_time(sub_matches, None).map_err(UdsHandlerError::ParseError)?;
 
     debug!("handle_queue");
@@ -70,6 +71,7 @@ async fn handle_queue(socket: UnixDatagram, sub_matches: &ArgMatches) -> HandleU
             UdsMessage::Public(MessageRequest::Queue {
                 work: work_time,
                 r#break: break_time,
+                desciption: description,
             })
             .encode()
             .map_err(UdsHandlerError::EncodeFailed)?

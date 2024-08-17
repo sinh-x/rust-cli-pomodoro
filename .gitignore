@@ -2,3 +2,5 @@
 credential.json
 # auto completion script
 _pomodoro
+tmp.rs
+result

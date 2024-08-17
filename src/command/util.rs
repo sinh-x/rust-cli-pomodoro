@@ -11,7 +11,7 @@ use crate::error::ParseError;
 pub fn parse_work_and_break_time(
     matches: &ArgMatches,
     configuration: Option<&Arc<Configuration>>,
-) -> Result<(Option<u16>, Option<u16>), ParseError> {
+) -> Result<(Option<u16>, Option<u16>, Option<String>), ParseError> {
     if let Some(conf) = configuration {
         let mut work_time = match conf.get_work_time() {
             Some(work_time) => work_time,
@@ -23,6 +23,8 @@ pub fn parse_work_and_break_time(
             None => DEFAULT_BREAK_TIME,
         };
 
+        let mut description = Some("A pomodoro".to_string());
+
         if let Ok(val) = parse_arg::<u16>(matches, "work") {
             work_time = val;
         };
@@ -31,10 +33,15 @@ pub fn parse_work_and_break_time(
             break_time = val;
         };
 
-        Ok((Some(work_time), Some(break_time)))
+        if let Some(val) = matches.get_one::<String>("description") {
+            description = Some(val.to_string());
+        };
+
+        Ok((Some(work_time), Some(break_time), description))
     } else {
         let mut work_time = None;
         let mut break_time = None;
+        let mut description = None;
 
         if let Ok(val) = parse_arg::<u16>(matches, "work") {
             work_time = Some(val);
@@ -43,7 +50,11 @@ pub fn parse_work_and_break_time(
         if let Ok(val) = parse_arg::<u16>(matches, "break") {
             break_time = Some(val);
         }
-        Ok((work_time, break_time))
+        if let Some(val) = matches.get_one::<String>("description") {
+            description = Some(val.to_string());
+        };
+
+        Ok((work_time, break_time, description))
     }
 }
 
