@@ -146,6 +146,7 @@ async fn handle_queue(
     glue: &ArcGlue,
     id_manager: &mut u16,
     output_accumulator: &mut OutputAccumulater,
+    sled_store: &SledStore,
 ) -> HandleUserInputResult {
     let created_at = match db::read_last_expired_notification(glue.clone()).await {
         Some(n) => {
@@ -161,6 +162,7 @@ async fn handle_queue(
         .map_err(UserInputHandlerError::NotificationError)?;
     let id = notification.get_id();
     db::create_notification(glue.clone(), &notification).await;
+    let _ = sled_store.create_notification(&notification_new);
 
     notification_task_map.lock().unwrap().insert(
         id,
@@ -300,7 +302,6 @@ async fn handle_list(
         styled_table.to_string()
     };
 
-    output_accumulator.push(OutputType::Info, format!("\n{}", table));
     output_accumulator.push(OutputType::Info, format!("\n{}", table_sled));
     output_accumulator.push(OutputType::Println, String::from("List succeed"));
 
@@ -327,7 +328,11 @@ async fn handle_history(
         debug!("Message:History done!");
 
         let mut main_table_sled = match sled_store.list_all_notifications() {
-            Ok(sleds) => sleds.table(),
+            Ok(sleds) => {
+                let item_count = sleds.len();
+                debug!("History: sled items count {}", item_count);
+                sleds.table()
+            }
             Err(e) => {
                 output_accumulator.push(OutputType::Error, format!("Error: {}", e));
                 return Ok(());
@@ -352,7 +357,6 @@ async fn handle_history(
             )
             .with(Modify::new(Segment::all()).with(Alignment::center()))
             .to_string();
-        output_accumulator.push(OutputType::Info, format!("\n{}", table));
         output_accumulator.push(OutputType::Info, format!("\n{}", table_sled));
         output_accumulator.push(OutputType::Println, String::from("History succeed"));
     }
