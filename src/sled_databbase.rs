@@ -52,6 +52,20 @@ impl<'a> NotificationSled {
         last_expired_at - duration
     }
 
+    pub fn get_next_notify(&self) -> u64 {
+        if self.work_expired_at <= Utc::now() {
+            if self.break_expired_at <= Utc::now() {
+                0
+            } else {
+                let duration = self.break_expired_at - Utc::now();
+                duration.num_seconds().max(0) as u64
+            }
+        } else {
+            let duration = self.work_expired_at - Utc::now();
+            duration.num_seconds().max(0) as u64
+        }
+    }
+
     #[allow(dead_code)]
     //TODO: review this function
     pub fn get_values(
@@ -249,6 +263,8 @@ impl SledStore {
                 notifications.push(notification);
             }
         }
+
+        notifications.sort_by(|a, b| b.work_expired_at.cmp(&a.work_expired_at));
         Ok(notifications)
     }
 
@@ -259,6 +275,23 @@ impl SledStore {
             let notification: NotificationSled = from_slice(&value).unwrap();
             notifications.push(notification);
         }
+
+        notifications.sort_by(|a, b| b.work_expired_at.cmp(&a.work_expired_at));
         Ok(notifications)
+    }
+
+    pub fn get_time_for_queue_notification(&self) -> Result<DateTime<Utc>, sled::Error> {
+        let created_at = match self.list_notifications() {
+            Ok(notifications) => {
+                if notifications.len() > 0 {
+                    let last_notification = &notifications[0];
+                    last_notification.break_expired_at
+                } else {
+                    Utc::now()
+                }
+            }
+            Err(_e) => Utc::now(),
+        };
+        Ok(created_at)
     }
 }

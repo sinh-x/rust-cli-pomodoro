@@ -1,4 +1,3 @@
-use chrono::Utc;
 use clap_complete::generate;
 use gluesql::prelude::{Glue, MemoryStorage};
 use std::collections::HashMap;
@@ -25,9 +24,7 @@ mod sled_databbase;
 
 use crate::error::ConfigurationError;
 use crate::ipc::{create_client_uds, create_server_uds, Bincodec, MessageRequest, MessageResponse};
-use crate::notification::archived_notification;
 use crate::notification::notify::{notify_break, notify_work};
-use crate::notification::Notification;
 use crate::sled_databbase::{NotificationSled, SledStore};
 use crate::{
     command::{handler, util, CommandType},
@@ -42,7 +39,7 @@ use crate::{
 extern crate log;
 
 // key: notification id, value: spawned notification task
-pub type TaskMap = HashMap<u16, JoinHandle<()>>;
+pub type TaskMap = HashMap<uuid::Uuid, JoinHandle<()>>;
 pub type ArcGlue = Arc<Mutex<Glue<MemoryStorage>>>;
 pub type ArcTaskMap = Arc<Mutex<TaskMap>>;
 
@@ -77,7 +74,7 @@ async fn main() {
 async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     logging::initialize_logging();
 
-    debug!("debug test, start pomodoro...");
+    debug!("debug test, start pomodoro... 1.5.4");
     let command_type = detect_command_type().await?;
     match command_type {
         CommandType::StartUp(config) => {
@@ -96,7 +93,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             let sled_store = SledStore::new(&path).unwrap();
 
             let glue = initialize_db().await;
-            let mut id_manager: u16 = 1;
             let hash_map: Arc<Mutex<TaskMap>> = Arc::new(Mutex::new(HashMap::new()));
             let (user_input_tx, mut user_input_rx) = mpsc::channel::<UserInput>(64);
 
@@ -123,6 +119,25 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 }
             };
 
+            match sled_store.list_notifications() {
+                Ok(active_notifications) => {
+                    for current_notification in active_notifications {
+                        hash_map.lock().unwrap().insert(
+                            current_notification.get_id(),
+                            spawn_notification(
+                                config.clone(),
+                                hash_map.clone(),
+                                &sled_store,
+                                current_notification,
+                            ),
+                        );
+                    }
+                }
+                Err(e) => {
+                    debug!("There was an error spawn existing notifications: {}", e)
+                }
+            };
+
             // Main loop to handle user input
             debug!("Main loop to handle user input");
             loop {
@@ -131,7 +146,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                     debug!("Server is alive inside while");
                     match handle_user_input(
                         user_input,
-                        &mut id_manager,
                         &hash_map,
                         &glue,
                         &config,
@@ -172,7 +186,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
 async fn handle_user_input(
     user_input: UserInput,
-    id_manager: &mut u16,
     hash_map: &Arc<Mutex<TaskMap>>,
     glue: &ArcGlue,
     config: &Arc<Configuration>,
@@ -182,7 +195,7 @@ async fn handle_user_input(
     let input = user_input.input.as_str();
     debug!("Input: {:?}", input);
 
-    match handler::user_input::handle(input, id_manager, hash_map, glue, config, sled_store).await {
+    match handler::user_input::handle(input, hash_map, glue, config, sled_store).await {
         Ok(mut output) => match user_input.source {
             InputSource::StandardInput => {}
             InputSource::UnixDomainSocket => {
@@ -251,23 +264,25 @@ async fn initialize_db() -> Arc<Mutex<Glue<MemoryStorage>>> {
 // TODO(young): refactor and move to proper place
 pub fn spawn_notification(
     configuration: Arc<Configuration>,
-    hash_map: Arc<Mutex<TaskMap>>,
-    glue: ArcGlue,
-    notification: Notification,
+    _hash_map: Arc<Mutex<TaskMap>>,
+    _sled_store: &SledStore,
+    notification: NotificationSled,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         let (id, _, work_time, break_time, _, _, _) = notification.get_values();
-        debug!("id: {}, task started", id);
-
-        let before_start_remaining = (notification.get_start_at() - Utc::now()).num_seconds();
-        let before = tokio::time::Duration::from_secs(before_start_remaining as u64);
-        debug!("before_start_remaining: {:?}", before_start_remaining);
-        sleep(before).await;
 
         if work_time > 0 {
-            let wt = tokio::time::Duration::from_secs(work_time as u64 * 60);
-            sleep(wt).await;
-            debug!("id ({}), work time ({}) done", id, work_time);
+            let wt = notification.get_next_notify();
+            match wt {
+                0 => debug!("spawn_notification: id ({}) no wait for work!", id),
+                1.. => {
+                    debug!(
+                        "spawn_notification: id ({}), work time ({}) sleep {:?} secs",
+                        id, work_time, wt
+                    );
+                    sleep(tokio::time::Duration::from_secs(wt)).await
+                }
+            }
 
             // TODO(young): handle notify report err
             let result = notify_work(&configuration).await;
@@ -279,9 +294,17 @@ pub fn spawn_notification(
         }
 
         if break_time > 0 {
-            let bt = tokio::time::Duration::from_secs(break_time as u64 * 60);
-            sleep(bt).await;
-            debug!("id ({}), break time ({}) done", id, break_time);
+            let bt = notification.get_next_notify();
+            match bt {
+                0 => debug!("spawn_notification: id ({}) no wait for break!", id),
+                1.. => {
+                    debug!(
+                        "spawn_notification: id ({}), break time ({}) sleep {:?} secs",
+                        id, break_time, bt
+                    );
+                    sleep(tokio::time::Duration::from_secs(bt)).await
+                }
+            }
 
             // TODO(young): handle notify report err
             let result = notify_break(&configuration).await;
@@ -290,11 +313,6 @@ pub fn spawn_notification(
                 println!("Notification report generated");
                 util::write_output(&mut io::stdout());
             }
-        }
-
-        let result = notification::delete_notification(id, hash_map, glue.clone()).await;
-        if result.is_err() {
-            trace!("error occurred while deleting notification");
         }
 
         debug!("id: {}, notification work time done!", id);
