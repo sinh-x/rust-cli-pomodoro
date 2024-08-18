@@ -1,4 +1,4 @@
-use chrono::{prelude::*, Duration};
+use chrono::prelude::*;
 use clap_complete::generate;
 use gluesql::prelude::{Glue, MemoryStorage};
 use std::collections::HashMap;
@@ -271,6 +271,8 @@ pub fn spawn_notification(
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         let (id, _, work_time, break_time, _, _, _) = notification.get_values();
+        let notify_time_min = -10;
+        let notify_time_max = 10;
 
         if work_time > 0 {
             let duration = notification.work_expired_at - Utc::now();
@@ -283,12 +285,15 @@ pub fn spawn_notification(
                         id, work_time, wt
                     );
                     sleep(tokio::time::Duration::from_secs(wt)).await;
-                    // TODO(young): handle notify report err
-                    let result = notify_work(&configuration).await;
-                    if let Ok(report) = result {
-                        info!("\n{}", report);
-                        println!("Notification report generated");
-                        util::write_output(&mut io::stdout());
+                    let time_diff = notification.work_expired_at - Utc::now(); // TODO(young): handle notify report err
+                    let time_diff = time_diff.num_seconds();
+                    if time_diff >= notify_time_min && time_diff <= notify_time_max {
+                        let result = notify_work(&configuration).await;
+                        if let Ok(report) = result {
+                            info!("\n{}", report);
+                            debug!("spawn_notification: Notification report generated");
+                            util::write_output(&mut io::stdout());
+                        }
                     }
                 }
             }
@@ -306,12 +311,16 @@ pub fn spawn_notification(
                         id, break_time, bt
                     );
                     sleep(tokio::time::Duration::from_secs(bt)).await;
-                    // TODO(young): handle notify report err
-                    let result = notify_break(&configuration).await;
-                    if let Ok(report) = result {
-                        info!("\n{}", report);
-                        println!("Notification report generated");
-                        util::write_output(&mut io::stdout());
+                    let time_diff = notification.work_expired_at - Utc::now(); // TODO(young): handle notify report err
+                    let time_diff = time_diff.num_seconds();
+                    if time_diff >= notify_time_min && time_diff <= notify_time_max {
+                        // TODO(young): handle notify report err
+                        let result = notify_break(&configuration).await;
+                        if let Ok(report) = result {
+                            info!("\n{}", report);
+                            debug!("spawn_notification: Notification report generated");
+                            util::write_output(&mut io::stdout());
+                        }
                     }
                 }
             }
