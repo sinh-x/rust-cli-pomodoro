@@ -137,7 +137,7 @@ mod tests {
         let file = PathBuf::from("resources/test/mock_configuration.json");
         let file = file.to_str();
 
-        let result = load_configuration(file);
+        let result = load_configuration(file.expect("Test Config file missing"));
         assert_eq!(true, result.is_ok());
         let config = result.unwrap().0;
 
@@ -167,7 +167,7 @@ mod tests {
         [PathBuf::from("wrong_path").to_str(), None]
             .into_iter()
             .for_each(|file| {
-                let result = load_configuration(file);
+                let result = load_configuration("No configuration file");
                 assert_eq!(true, result.is_ok());
                 let config = result.unwrap().0;
 
