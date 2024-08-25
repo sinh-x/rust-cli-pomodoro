@@ -96,7 +96,11 @@ async fn notify_discord(message: &'static str, configuration: &Arc<Configuration
 use std::process::Command;
 /// notify_desktop send notification to desktop.
 /// use notify-rust library for desktop notification
-async fn notify_desktop(summary_message: &'static str, body_message: &'static str) -> NotifyResult {
+async fn notify_desktop(
+    summary_message: &'static str,
+    body_message: &'static str,
+    configuration: &Arc<Configuration>,
+) -> NotifyResult {
     let mut notification = NR_Notification::new();
     let notification = notification
         .summary(summary_message)
@@ -111,9 +115,13 @@ async fn notify_desktop(summary_message: &'static str, body_message: &'static st
 
     // Stop mpd from playing
     debug!("Running pomodoro_notify script");
-    let _ = Command::new("/home/sinh/.config/sinh-x-local/pomodoro_notify")
-        .output()
-        .expect("Failed to run fish script");
+    if let Some(script) = configuration.get_notify_script() {
+        let _ = Command::new(script)
+            .output()
+            .expect("Failed to run fish script");
+    } else {
+        eprintln!("No notify script configured.");
+    }
 
     notification
         .show()
@@ -126,7 +134,11 @@ pub async fn notify_work(configuration: &Arc<Configuration>) -> Result<String, N
     #[cfg(target_os = "macos")]
     notify_terminal_notifier("work done. Take a rest!");
 
-    let desktop_fut = notify_desktop("Work time done!", "Work time finished.\nNow take a rest!");
+    let desktop_fut = notify_desktop(
+        "Work time done!",
+        "Work time finished.\nNow take a rest!",
+        configuration,
+    );
     let slack_fut = notify_slack("work done. Take a rest!", configuration);
     let discord_fut = notify_discord("work done. Take a rest!", configuration);
 
@@ -146,6 +158,7 @@ pub async fn notify_break(configuration: &Arc<Configuration>) -> Result<String, 
     let desktop_fut = notify_desktop(
         "Break time done!",
         "Break time finished.\n Now back to work!",
+        configuration,
     );
     let slack_fut = notify_slack("break done. Get back to work", configuration);
     let discord_fut = notify_discord("break done. Get back to work", configuration);

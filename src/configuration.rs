@@ -1,10 +1,11 @@
 use clap::ArgMatches;
+use dirs::home_dir;
 use serde::Deserialize;
 use std::env;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::BufReader;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::error::ConfigurationError;
@@ -20,6 +21,7 @@ pub struct Configuration {
     discord_configuration: Option<DiscordConfiguration>,
     work_time_default_value: Option<u16>,
     break_time_default_value: Option<u16>,
+    notify_script: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Default, Clone)]
@@ -62,10 +64,25 @@ impl Configuration {
     pub fn get_break_time(&self) -> Option<u16> {
         self.break_time_default_value
     }
+
+    pub fn get_notify_script(&self) -> Option<&String> {
+        self.notify_script.as_ref()
+    }
 }
 
 pub fn get_configuration(matches: &ArgMatches) -> Result<Arc<Configuration>, ConfigurationError> {
-    let configuration_file_path = matches.get_one::<String>("config").map(|s| s.as_str());
+    let default_config_path = home_dir()
+        .map(|mut path: PathBuf| {
+            path.push(".config/sinh-x/pomodoro/config.json");
+            path
+        })
+        .and_then(|path| path.to_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| "~/.config/sinh-x/pomodoro/config.json".to_string());
+
+    let configuration_file_path = matches
+        .get_one::<String>("config")
+        .map(|s| s.as_str())
+        .unwrap_or(&default_config_path);
 
     let (configuration, config_error) = load_configuration(configuration_file_path)?;
     let report = generate_configuration_report(&configuration, config_error);
@@ -75,20 +92,19 @@ pub fn get_configuration(matches: &ArgMatches) -> Result<Arc<Configuration>, Con
 }
 
 pub fn load_configuration(
-    configuration_file: Option<&str>,
+    configuration_file: &str,
 ) -> Result<(Configuration, Option<ConfigurationError>), ConfigurationError> {
-    let (configuration, error) = match configuration_file {
-        Some(f) => {
-            let path = env::current_dir()
-                .map_err(ConfigurationError::LoadFail)?
-                .join(f);
+    let path = env::current_dir()
+        .map_err(ConfigurationError::LoadFail)?
+        .join(configuration_file);
 
-            match get_configuration_from_file(path) {
-                Ok(config) => (config, None),
-                Err(e) => (Configuration::default(), Some(e)),
-            }
+    let (configuration, error) = if Path::new(&path).exists() {
+        match get_configuration_from_file(path) {
+            Ok(config) => (config, None),
+            Err(e) => (Configuration::default(), Some(e)),
         }
-        None => (Configuration::default(), None),
+    } else {
+        (Configuration::default(), None)
     };
 
     debug!("configuration: {:?}", configuration);

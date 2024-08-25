@@ -1,6 +1,6 @@
 [package]
 name = "sinh-x-pomodoro"
-version = "1.6.1"
+version = "1.7.0"
 authors = ["24seconds <24crazyoung@gmail.com>"]
 edition = "2021"
 rust-version = "1.78"
@@ -45,6 +45,7 @@ rustyline = "14.0.0"
 lmdb = "0.8"
 sled = "0.34"
 uuid = { version = "1.10", features = ["serde", "v4"] }
+dirs = "5.0"
 
 [[bin]]
 name = "pomodoro"
