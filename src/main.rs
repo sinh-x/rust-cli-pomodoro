@@ -311,7 +311,7 @@ pub fn spawn_notification(
                         id, break_time, bt
                     );
                     sleep(tokio::time::Duration::from_secs(bt)).await;
-                    let time_diff = notification.work_expired_at - Utc::now(); // TODO(young): handle notify report err
+                    let time_diff = notification.break_expired_at - Utc::now(); // TODO(young): handle notify report err
                     let time_diff = time_diff.num_seconds();
                     if time_diff >= notify_time_min && time_diff <= notify_time_max {
                         // TODO(young): handle notify report err
