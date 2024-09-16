@@ -116,6 +116,7 @@ async fn notify_desktop(
     // Stop mpd from playing
     debug!("Running pomodoro_notify script");
     if let Some(script) = configuration.get_notify_script() {
+        // TODO(sinh) trigger script without waiting for the result
         let _ = Command::new(script)
             .spawn()
             .expect("Failed to run fish script");
