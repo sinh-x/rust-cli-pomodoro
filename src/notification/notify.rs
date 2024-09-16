@@ -117,7 +117,7 @@ async fn notify_desktop(
     debug!("Running pomodoro_notify script");
     if let Some(script) = configuration.get_notify_script() {
         let _ = Command::new(script)
-            .output()
+            .spawn()
             .expect("Failed to run fish script");
     } else {
         eprintln!("No notify script configured.");
